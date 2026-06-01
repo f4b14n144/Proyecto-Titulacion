@@ -15,16 +15,18 @@
 
 ## Estado general
 Fecha última actualización: 2026-05-31
-Sprint activo: 2 (Sprint 1 completado)
+Sprint activo: 3 (Sprints 0-2 completados)
 Rama Git: main
 Repo: https://github.com/f4b14n144/Proyecto-Titulacion.git
 
 ---
 
 ## Próxima tarea al iniciar
-**S2-01** — Configurar APScheduler en `backend/app/core/scheduler.py` embebido en FastAPI
-- Crear `backend/app/core/scheduler.py` con `BackgroundScheduler` de APScheduler
-- Registrar en `backend/app/main.py` con `on_event("startup")`
+**S3-01** — Servicio `ia_engine.py` — configurar LiteLLM con credenciales del .env
+- Crear `backend/app/services/ia_engine.py`
+- Función `analizar_calificaciones_interciclo(datos: dict) -> dict`
+- Función `analizar_calificaciones_finales(datos: dict) -> dict`
+- Prompt para los 10 sub-análisis del Informe 4
 
 ---
 
@@ -101,31 +103,52 @@ Objetivo: director puede configurar todo el sistema y subir calificaciones
 
 ---
 
-## SPRINT 2 — EN CURSO 🔄
+## SPRINT 2 — COMPLETADO ✅
 Objetivo: flujo automático de notificaciones y generación de .docx
 
-- [ ] S2-01: Configurar APScheduler en scheduler.py embebido en FastAPI
-- [ ] S2-02: Job que calcula activaciones 2 días antes de cada fecha_limite_informe
-- [ ] S2-03: Job de actualización automática al crear/editar consejos
-- [ ] S2-04: Endpoint manual para disparar flujo de prueba sin esperar fecha
-- [ ] S2-05: mail_service.py — conexión SMTP (Brevo)
-- [ ] S2-06: mail_service.py — función enviar_email con template
-- [ ] S2-07: mail_service.py — generar reply_to_token único
-- [ ] S2-08: Emails a docentes pidiendo observaciones
-- [ ] S2-09: Emails a estudiantes invitando a reportar
-- [ ] S2-10: Polling IMAP para leer respuestas
-- [ ] S2-11: Parser IMAP — extraer token y correlacionar
-- [ ] S2-12: Guardar respuesta en respuestas_docentes
-- [ ] S2-13: Job APScheduler polling IMAP cada 15 min
-- [ ] S2-14 a S2-17: Plantillas .docx para informes 1-4
-- [ ] S2-18 a S2-20: doc_generator.py (generar, guardar, versionar)
-- [ ] S2-21: GET /informes/{id}/descargar
-- [ ] S2-22: Envío .docx por email al jefe
-- [ ] S2-23: Verificación completa Sprint 2
-- [ ] S2-24: CLAUDE.md Sprint 2 completado
+- [x] S2-01: scheduler.py — BackgroundScheduler APScheduler zona America/Guayaquil
+- [x] S2-02: programar_flujo_consejo — DateTrigger 2 días antes de fecha_limite
+- [x] S2-03: sincronizar_todos_los_consejos — restaura jobs al reiniciar servidor
+- [x] S2-04: flujo.py — POST /flujo/{id}/disparar (manual dev) + /reprogramar
+- [x] S2-05: mail_service.py — conexión SMTP Brevo con starttls
+- [x] S2-06: enviar_email — template HTML, adjuntos, modo dev sin SMTP
+- [x] S2-07: generar_reply_to_token — UUID único por notificación
+- [x] S2-08: enviar_email_docente — template con Reply-To personalizado
+- [x] S2-09: enviar_email_estudiantes — invitación a reportar
+- [x] S2-10: procesar_respuestas_imap — IMAP4_SSL, lee UNSEEN
+- [x] S2-11: _extraer_token_de_headers — busca respuestas+{uuid}@dominio en headers
+- [x] S2-12: Guarda RespuestaDocente, marca notificacion.respondido=True
+- [x] S2-13: iniciar_polling_imap — IntervalTrigger cada 15 min en scheduler
+- [x] S2-14 a S2-17: crear_plantillas.py — 4 plantillas .docx con Jinja2 para informes 1-4
+- [x] S2-18: doc_generator.py — generar_docx (plantilla Jinja2 o fallback básico)
+- [x] S2-19: Guarda .docx en app/static/docx/ y actualiza informe.ruta_docx
+- [x] S2-20: regenerar_docx — incrementa versión y regenera
+- [x] S2-21: informes.py — GET /informes/{id}/descargar FileResponse
+- [x] S2-22: enviar_docx_jefe — adjunta y envía .docx al jefe por correo
+- [x] S2-23/24: Sprint 2 verificado y CLAUDE.md actualizado
+
+## SPRINT 3 — EN CURSO 🔄
+Objetivo: integración IA y generación completa de informes
+
+- [ ] S3-01: ia_engine.py — configurar LiteLLM (ANTHROPIC_API_KEY del .env)
+- [ ] S3-02: Prompt análisis interciclo (P1/50): estadísticos + distribución 3 rangos + narrativa
+- [ ] S3-03: Prompt análisis final: 10 sub-análisis (general, aprobación, P1, P2, rec, outliers…)
+- [ ] S3-04: Prompt acciones de mejora por docente
+- [ ] S3-05: Prompt análisis consolidado del área
+- [ ] S3-06: Manejo de errores y reintentos si falla la API de IA
+- [ ] S3-07: POST /informes/generar-borrador — recibe consejo_id + area_id, ejecuta flujo completo
+- [ ] S3-08: Flujo completo Informe 3 (calificaciones + checklist_visita + IA + .docx)
+- [ ] S3-09: Flujo completo Informe 4 (calificaciones + respuestas_docentes + IA + .docx)
+- [ ] S3-10: PUT /informes/{id}/secciones — jefe edita secciones generadas
+- [ ] S3-11: Frontend Informe3.tsx — checklist visita + análisis interciclo + editor + descarga
+- [ ] S3-12: Frontend Informe4.tsx — análisis final editable + consolidado + descarga
+- [ ] S3-13: Frontend Informe2.tsx — checklist AVAC + estadísticas + editor
+- [ ] S3-14: Frontend Informe1.tsx — formulario completo + generación .docx
+- [ ] S3-15: Verificación end-to-end completa
+- [ ] S3-16: CLAUDE.md Sprint 3 completado
 
 ## SPRINTS PENDIENTES
-- Sprint 3: IA (LiteLLM), informes 1-4 completos
+- Sprint 4: Pruebas con datos reales Período 67
 - Sprint 3: IA (LiteLLM), informes 1-4 completos
 - Sprint 4: Pruebas con datos reales Período 67
 - Sprint 5: Ajustes finales, demo Taller Pitch 15-16/07/2026
