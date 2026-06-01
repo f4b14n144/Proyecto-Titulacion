@@ -22,10 +22,12 @@ Repo: https://github.com/f4b14n144/Proyecto-Titulacion.git
 ---
 
 ## Próxima tarea al iniciar
-**S4-04** — Generar Informe 3 completo con datos reales P67 y comparar con PDF de referencia
-- Usar consejo_id=1, seleccionar un área con calificaciones cargadas
-- POST /api/v1/informes/generar-borrador {"consejo_id":1,"area_id":N,"tipo_informe":3}
-- Verificar calidad narrativa del análisis de IA generado
+**S4-04/05 continuar** — Verificar calidad narrativa de la IA con API key válida
+- REQUISITO: Fabian necesita obtener nueva GEMINI_API_KEY desde https://aistudio.google.com
+  (la key actual AQ.Ab8R... tiene quota limit=0 — proyecto sin free tier habilitado)
+- Actualizar .env: GEMINI_API_KEY=AIzaSy... y reiniciar: docker compose up -d backend
+- Luego regenerar informes 3 y 4: POST /api/v1/informes/{id}/generar-docx
+- Comparar narrativa IA con PDF de referencia del P67
 
 ---
 
@@ -154,8 +156,8 @@ Objetivo: validar con datos reales del Período 67
   - Fix importación circular: declarative.py para Base, import app.db.base en seeds y main
   - Fix excel_processor: detección exacta de columnas (GRUPO vs CODIGO_GRUPO)
   - Fix bcrypt==4.0.1 + pydantic[email] en requirements.txt
-- [ ] S4-04: Generar Informe 3 real y comparar con PDF de referencia
-- [ ] S4-05: Generar Informe 4 real y comparar con PDF de referencia
+- [~] S4-04: Informe 3 generado (área 2, id=3) con estadísticos reales — narrativa IA pendiente de key válida
+- [~] S4-05: Informe 4 generado (área 3, id=4) con 10 asignaturas y estadísticos reales — narrativa IA pendiente
 - [ ] S4-06: Probar flujo de emails (simulado)
 - [ ] S4-07: Probar scheduler con fechas de prueba
 - [ ] S4-08: Probar edición de secciones en panel jefe
