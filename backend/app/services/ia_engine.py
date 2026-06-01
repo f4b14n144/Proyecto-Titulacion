@@ -1,5 +1,6 @@
 """
-Motor de IA usando LiteLLM → claude-sonnet-4-20250514.
+Motor de IA usando LiteLLM — proveedor configurable por .env.
+Proveedores soportados: gemini (Gemini API), anthropic (Claude).
 
 Genera análisis narrativos para los informes 3 y 4.
 Todos los prompts están en español y producen texto listo para
@@ -9,6 +10,7 @@ Manejo de errores: reintentos con backoff exponencial.
 Si falla tras N intentos, devuelve texto de fallback genérico.
 """
 
+import os
 import time
 import statistics
 from typing import Any
@@ -22,33 +24,70 @@ MAX_REINTENTOS = 3
 DELAY_BASE_SEG = 2.0  # espera exponencial: 2, 4, 8 seg
 
 
+def _api_key_y_modelo() -> tuple[str | None, str]:
+    """Devuelve (api_key_o_None, model_id) según el proveedor configurado."""
+    proveedor = settings.AI_PROVIDER.lower()
+    modelo = settings.AI_MODEL
+
+    if proveedor == "gemini":
+        # LiteLLM lee GEMINI_API_KEY del entorno automáticamente
+        os.environ["GEMINI_API_KEY"] = settings.GEMINI_API_KEY
+        if not modelo.startswith("gemini/"):
+            modelo = f"gemini/{modelo}"
+        # Para Gemini API no pasamos api_key directamente — LiteLLM lo toma del env
+        return None, modelo
+
+    # Anthropic
+    modelo_anthropic = modelo if modelo.startswith("anthropic/") else f"anthropic/{modelo}"
+    return settings.ANTHROPIC_API_KEY, modelo_anthropic
+
+
+def _api_configurada() -> bool:
+    proveedor = settings.AI_PROVIDER.lower()
+    if proveedor == "gemini":
+        return bool(settings.GEMINI_API_KEY)
+    return bool(settings.ANTHROPIC_API_KEY) and settings.ANTHROPIC_API_KEY != "sk-ant-REEMPLAZAR"
+
+
 def _llamar_ia(prompt: str, max_tokens: int = 800) -> str:
     """
     Llama a LiteLLM con reintentos y backoff exponencial.
     Devuelve el texto generado o un mensaje de fallback.
     """
-    if not settings.ANTHROPIC_API_KEY or settings.ANTHROPIC_API_KEY == "sk-ant-REEMPLAZAR":
-        logger.warning("ANTHROPIC_API_KEY no configurada — devolviendo texto placeholder")
-        return "[Análisis pendiente: configure ANTHROPIC_API_KEY en el archivo .env]"
+    if not _api_configurada():
+        logger.warning(f"API key de IA ({settings.AI_PROVIDER}) no configurada — devolviendo placeholder")
+        return f"[Análisis pendiente: configure {settings.AI_PROVIDER.upper()}_API_KEY en el archivo .env]"
+
+    api_key, modelo = _api_key_y_modelo()
 
     for intento in range(1, MAX_REINTENTOS + 1):
         try:
-            respuesta = litellm.completion(
-                model=f"anthropic/{settings.AI_MODEL}",
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=max_tokens,
-                api_key=settings.ANTHROPIC_API_KEY,
-            )
+            kwargs: dict = {
+                "model": modelo,
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": max_tokens,
+            }
+            if api_key:  # None para Gemini (usa env var GEMINI_API_KEY)
+                kwargs["api_key"] = api_key
+            respuesta = litellm.completion(**kwargs)
             texto = respuesta.choices[0].message.content.strip()
             logger.debug(f"IA respondió ({len(texto)} chars) en intento {intento}")
             return texto
         except Exception as e:
-            logger.warning(f"Error IA intento {intento}/{MAX_REINTENTOS}: {e}")
+            msg = str(e)
+            logger.warning(f"Error IA intento {intento}/{MAX_REINTENTOS}: {msg[:200]}")
+            # Si es 429 (cuota agotada diaria) no tiene sentido reintentar rápido
+            if "429" in msg and "Day" in msg:
+                logger.error("Cuota diaria de IA agotada — usando fallback sin reintentos")
+                break
             if intento < MAX_REINTENTOS:
-                time.sleep(DELAY_BASE_SEG * (2 ** (intento - 1)))
+                espera = DELAY_BASE_SEG * (2 ** (intento - 1))
+                if "429" in msg:
+                    espera = max(espera, 65)  # esperar al menos 65 seg si es rate limit
+                time.sleep(espera)
 
     logger.error("IA falló tras todos los reintentos — usando fallback")
-    return "[Análisis no disponible — error de conectividad con la IA. Editar manualmente.]"
+    return "[Análisis no disponible — cuota de IA agotada. Editar manualmente este campo.]"
 
 
 # ──────────────────────────────────────────────────────────────────

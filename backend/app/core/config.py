@@ -11,9 +11,10 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
-    AI_PROVIDER: str = "anthropic"
-    AI_MODEL: str = "claude-sonnet-4-20250514"
+    AI_PROVIDER: str = "gemini"
+    AI_MODEL: str = "gemini/gemini-1.5-flash"
     ANTHROPIC_API_KEY: str = ""
+    GEMINI_API_KEY: str = ""
 
     SMTP_HOST: str = ""
     SMTP_PORT: int = 587
