@@ -15,18 +15,17 @@
 
 ## Estado general
 Fecha última actualización: 2026-05-31
-Sprint activo: 3 (Sprints 0-2 completados)
+Sprint activo: 4 (Sprints 0-3 completados)
 Rama Git: main
 Repo: https://github.com/f4b14n144/Proyecto-Titulacion.git
 
 ---
 
 ## Próxima tarea al iniciar
-**S3-01** — Servicio `ia_engine.py` — configurar LiteLLM con credenciales del .env
-- Crear `backend/app/services/ia_engine.py`
-- Función `analizar_calificaciones_interciclo(datos: dict) -> dict`
-- Función `analizar_calificaciones_finales(datos: dict) -> dict`
-- Prompt para los 10 sub-análisis del Informe 4
+**S4-01** — Cargar datos reales del Período 67
+- Fabian debe proveer: Horario-P67.xlsx, Calificaciones_finales.xlsx, Calificaciones_hasta_el_interciclo.xlsx
+- Crear script de carga o ingresar desde el panel (períodos, consejos, áreas, asignaturas, docentes, asignaciones)
+- Ver docs/pending.md para preguntas abiertas sobre datos reales
 
 ---
 
@@ -127,28 +126,46 @@ Objetivo: flujo automático de notificaciones y generación de .docx
 - [x] S2-22: enviar_docx_jefe — adjunta y envía .docx al jefe por correo
 - [x] S2-23/24: Sprint 2 verificado y CLAUDE.md actualizado
 
-## SPRINT 3 — EN CURSO 🔄
+## SPRINT 3 — COMPLETADO ✅
 Objetivo: integración IA y generación completa de informes
 
-- [ ] S3-01: ia_engine.py — configurar LiteLLM (ANTHROPIC_API_KEY del .env)
-- [ ] S3-02: Prompt análisis interciclo (P1/50): estadísticos + distribución 3 rangos + narrativa
-- [ ] S3-03: Prompt análisis final: 10 sub-análisis (general, aprobación, P1, P2, rec, outliers…)
-- [ ] S3-04: Prompt acciones de mejora por docente
-- [ ] S3-05: Prompt análisis consolidado del área
-- [ ] S3-06: Manejo de errores y reintentos si falla la API de IA
-- [ ] S3-07: POST /informes/generar-borrador — recibe consejo_id + area_id, ejecuta flujo completo
-- [ ] S3-08: Flujo completo Informe 3 (calificaciones + checklist_visita + IA + .docx)
-- [ ] S3-09: Flujo completo Informe 4 (calificaciones + respuestas_docentes + IA + .docx)
-- [ ] S3-10: PUT /informes/{id}/secciones — jefe edita secciones generadas
-- [ ] S3-11: Frontend Informe3.tsx — checklist visita + análisis interciclo + editor + descarga
-- [ ] S3-12: Frontend Informe4.tsx — análisis final editable + consolidado + descarga
-- [ ] S3-13: Frontend Informe2.tsx — checklist AVAC + estadísticas + editor
-- [ ] S3-14: Frontend Informe1.tsx — formulario completo + generación .docx
-- [ ] S3-15: Verificación end-to-end completa
-- [ ] S3-16: CLAUDE.md Sprint 3 completado
+- [x] S3-01: ia_engine.py — LiteLLM → anthropic/claude-sonnet-4-20250514
+- [x] S3-02: analizar_calificaciones_interciclo — estadísticos + rangos + narrativo + acciones
+- [x] S3-03: analizar_calificaciones_finales — 10 sub-análisis completos
+- [x] S3-04: acciones_mejora con contexto respuesta docente (si existe)
+- [x] S3-05: analizar_consolidado_area — resumen multi-asignatura + acciones generales
+- [x] S3-06: Reintentos backoff exponencial (2→4→8 seg), fallback texto placeholder
+- [x] S3-07: POST /informes/generar-borrador — BackgroundTask, no bloquea HTTP
+- [x] S3-08: generar_informe_3 — checklist visita + calificaciones interciclo + IA + .docx
+- [x] S3-09: generar_informe_4 — 10 sub-análisis IA por asig + consolidado área + .docx
+- [x] S3-10: PUT /informes/{id}/secciones — ya existía, verificado
+- [x] S3-11: Informe3.tsx — checklist visita 6 params + análisis interciclo IA + descarga
+- [x] S3-12: Informe4.tsx — 10 sub-análisis editables + consolidado área + descarga
+- [x] S3-13: Informe2.tsx — checklist AVAC 12 params + observaciones + descarga
+- [x] S3-14: Informe1.tsx — 6 secciones editables + campo director + descarga
+- [x] S3-15/16: Sprint 3 completado y CLAUDE.md actualizado
+
+## SPRINT 4 — PENDIENTE ⏳
+Objetivo: validar con datos reales del Período 67
+
+- [ ] S4-01: Cargar datos reales P67 (requiere archivos de Fabian)
+- [ ] S4-02: Probar subida Calificaciones_finales.xlsx real
+- [ ] S4-03: Probar Calificaciones_hasta_el_interciclo.xlsx
+- [ ] S4-04: Generar Informe 3 real y comparar con PDF de referencia
+- [ ] S4-05: Generar Informe 4 real y comparar con PDF de referencia
+- [ ] S4-06: Probar flujo de emails (simulado)
+- [ ] S4-07: Probar scheduler con fechas de prueba
+- [ ] S4-08: Probar edición de secciones en panel jefe
+- [ ] S4-09: Probar descarga .docx y verificar formato
+- [ ] S4-10: Corregir bugs encontrados
+- [ ] S4-11: Casos borde: Excel con parciales en 0, docente sin respuesta, grupos 1 estudiante
+- [ ] S4-12: Pruebas de permisos por rol
+- [ ] S4-13: Revisar calidad narrativa de análisis IA
+- [ ] S4-14: Ajustar prompts según resultados
+- [ ] S4-15: CLAUDE.md Sprint 4 completado
 
 ## SPRINTS PENDIENTES
-- Sprint 4: Pruebas con datos reales Período 67
+- Sprint 5: Ajustes finales, UI, demo Taller Pitch 15-16/07/2026
 - Sprint 3: IA (LiteLLM), informes 1-4 completos
 - Sprint 4: Pruebas con datos reales Período 67
 - Sprint 5: Ajustes finales, demo Taller Pitch 15-16/07/2026
