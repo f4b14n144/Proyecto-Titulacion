@@ -22,9 +22,10 @@ Repo: https://github.com/f4b14n144/Proyecto-Titulacion.git
 ---
 
 ## Próxima tarea al iniciar
-**S1-01** — CRUD de períodos académicos
-- Backend: crear `backend/app/api/v1/endpoints/periodos.py` + `backend/app/schemas/periodo.py`
-- Registrar el router en `backend/app/api/v1/api_router.py`
+**S1-13** — Endpoint gestión completa de usuarios con filtros
+- Ya existe `backend/app/api/v1/endpoints/usuarios.py`
+- Verificar que tiene filtros por rol y activo — ya los tiene
+- Crear `frontend/src/pages/director/Usuarios.tsx` funcional (S1-14)
 
 ---
 
@@ -76,18 +77,18 @@ Objetivo: entorno funcional con frontend, backend y DB conectados
 ## SPRINT 1 — EN CURSO 🔄
 Objetivo: director puede configurar todo el sistema y subir calificaciones
 
-- [ ] S1-01: CRUD períodos académicos (backend: endpoints + schemas)
-- [ ] S1-02: Pantalla Periodos.tsx funcional en panel director
-- [ ] S1-03: CRUD Consejos de Carrera con fechas (backend)
-- [ ] S1-04: Pantalla Consejos.tsx funcional
-- [ ] S1-05: CRUD áreas curriculares (backend)
-- [ ] S1-06: Pantalla Areas.tsx funcional
-- [ ] S1-07: CRUD asignaturas con asignación a área (backend)
-- [ ] S1-08: Pantalla Asignaturas.tsx
-- [ ] S1-09: Endpoints jefaturas de área con validaciones de unicidad
-- [ ] S1-10: Pantalla asignación de jefaturas
-- [ ] S1-11: Endpoints asignaciones docente-asignatura-grupo por período
-- [ ] S1-12: Pantalla asignaciones docente
+- [x] S1-01: CRUD períodos académicos (backend: endpoints + schemas)
+- [x] S1-02: Pantalla Periodos.tsx funcional en panel director
+- [x] S1-03: CRUD Consejos de Carrera con fechas (backend)
+- [x] S1-04: Pantalla Consejos.tsx funcional
+- [x] S1-05: CRUD áreas curriculares (backend)
+- [x] S1-06: Pantalla Areas.tsx funcional
+- [x] S1-07: CRUD asignaturas con asignación a área (backend)
+- [x] S1-08: Pantalla Asignaturas.tsx funcional
+- [x] S1-09: Endpoints jefaturas de área con validaciones de unicidad
+- [x] S1-10: Pantalla asignación de jefaturas (tab en Asignaciones.tsx)
+- [x] S1-11: Endpoints asignaciones docente-asignatura-grupo por período
+- [x] S1-12: Pantalla asignaciones docente (tab en Asignaciones.tsx)
 - [ ] S1-13: Endpoint gestión completa de usuarios con filtros
 - [ ] S1-14: Pantalla Usuarios.tsx funcional
 - [ ] S1-15: excel_processor.py — leer Excel, detectar columnas
