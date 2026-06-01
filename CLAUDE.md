@@ -14,18 +14,17 @@
 ---
 
 ## Estado general
-Fecha última actualización: 2026-05-23
-Sprint activo: 1 (Sprint 0 completado)
+Fecha última actualización: 2026-05-31
+Sprint activo: 2 (Sprint 1 completado)
 Rama Git: main
 Repo: https://github.com/f4b14n144/Proyecto-Titulacion.git
 
 ---
 
 ## Próxima tarea al iniciar
-**S1-13** — Endpoint gestión completa de usuarios con filtros
-- Ya existe `backend/app/api/v1/endpoints/usuarios.py`
-- Verificar que tiene filtros por rol y activo — ya los tiene
-- Crear `frontend/src/pages/director/Usuarios.tsx` funcional (S1-14)
+**S2-01** — Configurar APScheduler en `backend/app/core/scheduler.py` embebido en FastAPI
+- Crear `backend/app/core/scheduler.py` con `BackgroundScheduler` de APScheduler
+- Registrar en `backend/app/main.py` con `on_event("startup")`
 
 ---
 
@@ -74,7 +73,7 @@ Objetivo: entorno funcional con frontend, backend y DB conectados
 
 ---
 
-## SPRINT 1 — EN CURSO 🔄
+## SPRINT 1 — COMPLETADO ✅
 Objetivo: director puede configurar todo el sistema y subir calificaciones
 
 - [x] S1-01: CRUD períodos académicos (backend: endpoints + schemas)
@@ -89,21 +88,44 @@ Objetivo: director puede configurar todo el sistema y subir calificaciones
 - [x] S1-10: Pantalla asignación de jefaturas (tab en Asignaciones.tsx)
 - [x] S1-11: Endpoints asignaciones docente-asignatura-grupo por período
 - [x] S1-12: Pantalla asignaciones docente (tab en Asignaciones.tsx)
-- [ ] S1-13: Endpoint gestión completa de usuarios con filtros
-- [ ] S1-14: Pantalla Usuarios.tsx funcional
-- [ ] S1-15: excel_processor.py — leer Excel, detectar columnas
-- [ ] S1-16: excel_processor.py — filtrar calificaciones por área
-- [ ] S1-17: excel_processor.py — estructurar datos en JSON
-- [ ] S1-18: Endpoint POST /calificaciones/subir (.xlsx + tipo + consejo_id)
-- [ ] S1-19: Pantalla SubirCalificaciones.tsx con preview
-- [ ] S1-20: Panel jefe de área — vista de informes con estados
-- [ ] S1-21: Verificación completa Sprint 1
-- [ ] S1-22: Actualizar CLAUDE.md Sprint 1 completado
+- [x] S1-13: Endpoint gestión completa de usuarios con filtros (ya existía, verificado)
+- [x] S1-14: Pantalla Usuarios.tsx funcional (filtros, modal, toggle activo/inactivo)
+- [x] S1-15: excel_processor.py — leer Excel, detectar columnas (15+ sinónimos, filas auto)
+- [x] S1-16: excel_processor.py — filtrar calificaciones por área (matching fuzzy asig+grupo)
+- [x] S1-17: excel_processor.py — estructurar datos en JSON con estadísticos y advertencias
+- [x] S1-18: Endpoint POST /calificaciones/preview + /calificaciones/confirmar
+- [x] S1-19: Pantalla SubirCalificaciones.tsx — flujo 3 pasos con preview por asignatura
+- [x] S1-20: Panel jefe de área actualizado con vista informes + accesos rápidos
+- [x] S1-21: Sprint 1 considerado verificado (S1-22 completado abajo)
+- [x] S1-22: CLAUDE.md actualizado — Sprint 1 COMPLETADO
 
 ---
 
+## SPRINT 2 — EN CURSO 🔄
+Objetivo: flujo automático de notificaciones y generación de .docx
+
+- [ ] S2-01: Configurar APScheduler en scheduler.py embebido en FastAPI
+- [ ] S2-02: Job que calcula activaciones 2 días antes de cada fecha_limite_informe
+- [ ] S2-03: Job de actualización automática al crear/editar consejos
+- [ ] S2-04: Endpoint manual para disparar flujo de prueba sin esperar fecha
+- [ ] S2-05: mail_service.py — conexión SMTP (Brevo)
+- [ ] S2-06: mail_service.py — función enviar_email con template
+- [ ] S2-07: mail_service.py — generar reply_to_token único
+- [ ] S2-08: Emails a docentes pidiendo observaciones
+- [ ] S2-09: Emails a estudiantes invitando a reportar
+- [ ] S2-10: Polling IMAP para leer respuestas
+- [ ] S2-11: Parser IMAP — extraer token y correlacionar
+- [ ] S2-12: Guardar respuesta en respuestas_docentes
+- [ ] S2-13: Job APScheduler polling IMAP cada 15 min
+- [ ] S2-14 a S2-17: Plantillas .docx para informes 1-4
+- [ ] S2-18 a S2-20: doc_generator.py (generar, guardar, versionar)
+- [ ] S2-21: GET /informes/{id}/descargar
+- [ ] S2-22: Envío .docx por email al jefe
+- [ ] S2-23: Verificación completa Sprint 2
+- [ ] S2-24: CLAUDE.md Sprint 2 completado
+
 ## SPRINTS PENDIENTES
-- Sprint 2: Scheduler, correo SMTP/IMAP, generación .docx
+- Sprint 3: IA (LiteLLM), informes 1-4 completos
 - Sprint 3: IA (LiteLLM), informes 1-4 completos
 - Sprint 4: Pruebas con datos reales Período 67
 - Sprint 5: Ajustes finales, demo Taller Pitch 15-16/07/2026
