@@ -22,10 +22,10 @@ Repo: https://github.com/f4b14n144/Proyecto-Titulacion.git
 ---
 
 ## Próxima tarea al iniciar
-**S4-01** — Cargar datos reales del Período 67
-- Fabian debe proveer: Horario-P67.xlsx, Calificaciones_finales.xlsx, Calificaciones_hasta_el_interciclo.xlsx
-- Crear script de carga o ingresar desde el panel (períodos, consejos, áreas, asignaturas, docentes, asignaciones)
-- Ver docs/pending.md para preguntas abiertas sobre datos reales
+**S4-04** — Generar Informe 3 completo con datos reales P67 y comparar con PDF de referencia
+- Usar consejo_id=1, seleccionar un área con calificaciones cargadas
+- POST /api/v1/informes/generar-borrador {"consejo_id":1,"area_id":N,"tipo_informe":3}
+- Verificar calidad narrativa del análisis de IA generado
 
 ---
 
@@ -148,9 +148,12 @@ Objetivo: integración IA y generación completa de informes
 ## SPRINT 4 — PENDIENTE ⏳
 Objetivo: validar con datos reales del Período 67
 
-- [ ] S4-01: Cargar datos reales P67 (requiere archivos de Fabian)
-- [ ] S4-02: Probar subida Calificaciones_finales.xlsx real
-- [ ] S4-03: Probar Calificaciones_hasta_el_interciclo.xlsx
+- [x] S4-01: seed_p67.py — 39 docentes, 44 asignaturas, 83 asignaciones P67
+- [x] S4-02: Calificaciones_finales.xlsx — 75 asignaturas procesadas correctamente
+- [x] S4-03: Calificaciones_interciclo.xlsx — 76 asignaturas procesadas correctamente
+  - Fix importación circular: declarative.py para Base, import app.db.base en seeds y main
+  - Fix excel_processor: detección exacta de columnas (GRUPO vs CODIGO_GRUPO)
+  - Fix bcrypt==4.0.1 + pydantic[email] en requirements.txt
 - [ ] S4-04: Generar Informe 3 real y comparar con PDF de referencia
 - [ ] S4-05: Generar Informe 4 real y comparar con PDF de referencia
 - [ ] S4-06: Probar flujo de emails (simulado)
