@@ -10,6 +10,7 @@ import Usuarios from './pages/director/Usuarios'
 import Periodos from './pages/director/Periodos'
 import Consejos from './pages/director/Consejos'
 import Areas from './pages/director/Areas'
+import Asignaturas from './pages/director/Asignaturas'
 import Asignaciones from './pages/director/Asignaciones'
 import SubirCalificaciones from './pages/director/SubirCalificaciones'
 import Informe1 from './pages/director/Informe1'
@@ -56,6 +57,7 @@ export default function App() {
                 <Route path="periodos" element={<Periodos />} />
                 <Route path="consejos" element={<Consejos />} />
                 <Route path="areas" element={<Areas />} />
+                <Route path="asignaturas" element={<Asignaturas />} />
                 <Route path="asignaciones" element={<Asignaciones />} />
                 <Route path="calificaciones" element={<SubirCalificaciones />} />
                 <Route path="informe1" element={<Informe1 />} />
