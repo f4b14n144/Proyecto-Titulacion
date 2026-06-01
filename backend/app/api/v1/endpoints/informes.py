@@ -1,10 +1,10 @@
 from pathlib import Path
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, ConfigDict
 from typing import Any, Optional
-from app.core.deps import get_db, get_current_user
+from app.core.deps import get_db, get_current_user, require_role
 from app.models.informe import Informe
 from app.models.usuario import Usuario
 from app.services.doc_generator import generar_docx, regenerar_docx
@@ -12,6 +12,8 @@ from app.services.doc_generator import generar_docx, regenerar_docx
 router = APIRouter()
 
 DOCX_DIR = Path("app/static/docx")
+
+_solo_director = require_role("DIRECTOR_CARRERA")
 
 
 class InformeOut(BaseModel):
@@ -143,3 +145,43 @@ def cambiar_estado(
     informe.estado = estado
     db.commit()
     return {"data": InformeOut.model_validate(informe), "message": "Estado actualizado", "success": True}
+
+
+class GenerarBorradorRequest(BaseModel):
+    consejo_id: int
+    area_id: int
+    tipo_informe: int  # 1 | 2 | 3 | 4
+
+
+@router.post("/generar-borrador", response_model=dict)
+def generar_borrador(
+    payload: GenerarBorradorRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(_solo_director),
+):
+    """
+    Genera el borrador del informe solicitado usando IA.
+    Los informes 3 y 4 pueden tardar 30-90 seg según la cantidad de asignaturas.
+    El endpoint responde inmediatamente y el trabajo ocurre en background.
+    """
+    from app.services.generador_informes import (
+        generar_informe_1, generar_informe_2, generar_informe_3, generar_informe_4,
+    )
+
+    generadores = {1: generar_informe_1, 2: generar_informe_2, 3: generar_informe_3, 4: generar_informe_4}
+    fn = generadores.get(payload.tipo_informe)
+    if fn is None:
+        raise HTTPException(status_code=400, detail="tipo_informe debe ser 1, 2, 3 o 4")
+
+    background_tasks.add_task(fn, db, payload.consejo_id, payload.area_id)
+
+    return {
+        "data": {
+            "consejo_id": payload.consejo_id,
+            "area_id": payload.area_id,
+            "tipo_informe": payload.tipo_informe,
+        },
+        "message": "Generación de borrador iniciada. Consulta GET /informes/ en unos momentos.",
+        "success": True,
+    }
