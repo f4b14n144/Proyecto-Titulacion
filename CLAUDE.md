@@ -22,12 +22,15 @@ Repo: https://github.com/f4b14n144/Proyecto-Titulacion.git
 ---
 
 ## Próxima tarea al iniciar
-**S4-04/05 continuar** — Verificar calidad narrativa de la IA con API key válida
-- REQUISITO: Fabian necesita obtener nueva GEMINI_API_KEY desde https://aistudio.google.com
-  (la key actual AQ.Ab8R... tiene quota limit=0 — proyecto sin free tier habilitado)
-- Actualizar .env: GEMINI_API_KEY=AIzaSy... y reiniciar: docker compose up -d backend
-- Luego regenerar informes 3 y 4: POST /api/v1/informes/{id}/generar-docx
-- Comparar narrativa IA con PDF de referencia del P67
+**S4-06** — Probar flujo de emails (simulado) + S4-07 scheduler con fechas de prueba
+- La IA ya funciona con Groq (free tier, sin tarjeta). Informes 3 y 4 con narrativa completa.
+- Continuar pruebas: emails, scheduler, permisos por rol, casos borde
+
+## NOTA IMPORTANTE — Proveedor de IA
+- Se usa GROQ (free tier sin tarjeta): AI_PROVIDER=groq, AI_MODEL=groq/llama-3.3-70b-versatile
+- GROQ_API_KEY está en .env (no en repo). Calidad de narrativa: profesional, español formal.
+- ia_engine.py soporta 4 proveedores: groq, deepseek, gemini, anthropic (cambiar AI_PROVIDER)
+- Gemini/Anthropic/DeepSeek se probaron: keys válidas pero sin saldo/quota en esas cuentas
 
 ---
 
@@ -156,8 +159,8 @@ Objetivo: validar con datos reales del Período 67
   - Fix importación circular: declarative.py para Base, import app.db.base en seeds y main
   - Fix excel_processor: detección exacta de columnas (GRUPO vs CODIGO_GRUPO)
   - Fix bcrypt==4.0.1 + pydantic[email] en requirements.txt
-- [~] S4-04: Informe 3 generado (área 2, id=3) con estadísticos reales — narrativa IA pendiente de key válida
-- [~] S4-05: Informe 4 generado (área 3, id=4) con 10 asignaturas y estadísticos reales — narrativa IA pendiente
+- [x] S4-04: Informe 3 (área 2, id=3) — 8 asignaturas, narrativa IA Groq completa + .docx
+- [x] S4-05: Informe 4 (área 3, id=4) — 10 asignaturas, 10 sub-análisis IA completos + .docx
 - [ ] S4-06: Probar flujo de emails (simulado)
 - [ ] S4-07: Probar scheduler con fechas de prueba
 - [ ] S4-08: Probar edición de secciones en panel jefe
