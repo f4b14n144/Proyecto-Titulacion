@@ -37,6 +37,20 @@ def _api_key_y_modelo() -> tuple[str | None, str]:
         # Para Gemini API no pasamos api_key directamente — LiteLLM lo toma del env
         return None, modelo
 
+    if proveedor == "deepseek":
+        # LiteLLM lee DEEPSEEK_API_KEY del entorno automáticamente
+        os.environ["DEEPSEEK_API_KEY"] = settings.DEEPSEEK_API_KEY
+        if not modelo.startswith("deepseek/"):
+            modelo = f"deepseek/{modelo}"
+        return settings.DEEPSEEK_API_KEY, modelo
+
+    if proveedor == "groq":
+        # LiteLLM lee GROQ_API_KEY del entorno automáticamente
+        os.environ["GROQ_API_KEY"] = settings.GROQ_API_KEY
+        if not modelo.startswith("groq/"):
+            modelo = f"groq/{modelo}"
+        return settings.GROQ_API_KEY, modelo
+
     # Anthropic
     modelo_anthropic = modelo if modelo.startswith("anthropic/") else f"anthropic/{modelo}"
     return settings.ANTHROPIC_API_KEY, modelo_anthropic
@@ -46,6 +60,10 @@ def _api_configurada() -> bool:
     proveedor = settings.AI_PROVIDER.lower()
     if proveedor == "gemini":
         return bool(settings.GEMINI_API_KEY)
+    if proveedor == "deepseek":
+        return bool(settings.DEEPSEEK_API_KEY)
+    if proveedor == "groq":
+        return bool(settings.GROQ_API_KEY)
     return bool(settings.ANTHROPIC_API_KEY) and settings.ANTHROPIC_API_KEY != "sk-ant-REEMPLAZAR"
 
 

@@ -11,10 +11,12 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
-    AI_PROVIDER: str = "gemini"
-    AI_MODEL: str = "gemini/gemini-1.5-flash"
+    AI_PROVIDER: str = "groq"
+    AI_MODEL: str = "groq/llama-3.3-70b-versatile"
     ANTHROPIC_API_KEY: str = ""
     GEMINI_API_KEY: str = ""
+    DEEPSEEK_API_KEY: str = ""
+    GROQ_API_KEY: str = ""
 
     SMTP_HOST: str = ""
     SMTP_PORT: int = 587
