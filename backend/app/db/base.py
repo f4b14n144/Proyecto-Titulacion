@@ -1,9 +1,4 @@
-from sqlalchemy.orm import DeclarativeBase
-
-
-class Base(DeclarativeBase):
-    pass
-
+from app.db.declarative import Base  # noqa: F401 — re-export para Alembic
 
 # Importar todos los modelos para que Alembic los detecte en autogenerate
 from app.models.rol import Rol  # noqa: F401

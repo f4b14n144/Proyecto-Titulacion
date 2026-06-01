@@ -1,6 +1,6 @@
-from sqlalchemy import Column, Integer, ForeignKey, Date, String, DateTime
+﻿from sqlalchemy import Column, Integer, ForeignKey, Date, String, DateTime
 from sqlalchemy.orm import relationship
-from app.db.base import Base
+from app.db.declarative import Base
 
 
 class ConsejoCarrera(Base):

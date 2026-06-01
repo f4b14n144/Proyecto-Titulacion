@@ -1,6 +1,6 @@
-from sqlalchemy import Column, Integer, ForeignKey, UniqueConstraint
+﻿from sqlalchemy import Column, Integer, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import relationship
-from app.db.base import Base
+from app.db.declarative import Base
 
 
 class JefaturaArea(Base):
@@ -12,9 +12,9 @@ class JefaturaArea(Base):
     periodo_id = Column(Integer, ForeignKey("periodos_academicos.id"), nullable=False)
 
     __table_args__ = (
-        # Una área = un jefe por período
+        # Una Ã¡rea = un jefe por perÃ­odo
         UniqueConstraint("area_id", "periodo_id", name="uq_jefatura_area_periodo"),
-        # Un docente = una sola área por período
+        # Un docente = una sola Ã¡rea por perÃ­odo
         UniqueConstraint("usuario_id", "periodo_id", name="uq_jefatura_usuario_periodo"),
     )
 

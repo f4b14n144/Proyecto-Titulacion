@@ -1,6 +1,6 @@
-from sqlalchemy import Column, Integer, String, Boolean, Date
+﻿from sqlalchemy import Column, Integer, String, Boolean, Date
 from sqlalchemy.orm import relationship
-from app.db.base import Base
+from app.db.declarative import Base
 
 
 class PeriodoAcademico(Base):

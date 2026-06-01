@@ -2,6 +2,7 @@
 Datos iniciales: roles, usuario admin, áreas base de la Carrera de Computación UPS.
 Ejecutar: docker compose exec backend python -m app.db.seed
 """
+import app.db.base  # noqa: F401 — carga todos los modelos para SQLAlchemy
 from app.db.session import SessionLocal
 from app.models.rol import Rol
 from app.models.usuario import Usuario
