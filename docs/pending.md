@@ -1,5 +1,27 @@
 # Pendientes y Preguntas Abiertas
 
+## 🔴 BUG PRIORITARIO (hallado en S4-11) — calificaciones no distingue grupo
+
+**Problema:** La tabla `calificaciones` tiene unicidad implícita por
+`(asignatura_id, consejo_id, tipo)` pero NO incluye `grupo`. Cuando una
+asignatura tiene varios grupos, cada grupo SOBREESCRIBE al anterior.
+Por eso de 75 calificaciones FINAL subidas solo quedaron 40.
+Ejemplos: ÁLGEBRA LINEAL (4 grupos→1), COMUNICACIÓN ORAL Y ESCRITA (4→1),
+ECUACIONES DIFERENCIALES (2→1).
+
+**Impacto:** Los informes de área pierden grupos. Datos incompletos.
+
+**Fix requerido (orden):**
+1. `models/calificacion.py`: agregar `grupo = Column(String, nullable=True)`
+2. Migración `003`: add column grupo a calificaciones
+3. `endpoints/calificaciones.py` (confirmar): el filtro de sobrescritura debe
+   incluir `Calificacion.grupo == r["grupo"]` y setear grupo al crear
+4. `services/generador_informes.py`: las queries que hacen
+   `Calificacion ... .first()` por asignatura deben filtrar también por
+   `datos_json grupo` o por la nueva columna grupo, e iterar por asignación
+5. Re-subir los 2 Excel y regenerar informes 3 y 4 para validar
+6. Verificar que ahora se guardan las 75/76 calificaciones completas
+
 ## Preguntas para Fabian — responder antes de Sprint 2
 
 1. **Dominio email institucional**: ¿Cuál es el dominio real para `REPLY_TO_DOMAIN`?

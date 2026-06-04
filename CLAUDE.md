@@ -14,17 +14,20 @@
 ---
 
 ## Estado general
-Fecha última actualización: 2026-05-31
-Sprint activo: 4 (Sprints 0-3 completados)
+Fecha última actualización: 2026-06-04
+Sprint activo: 4 (Sprints 0-3 completados; S4-06/07/08/12 OK, S4-10 fix pendiente)
 Rama Git: main
 Repo: https://github.com/f4b14n144/Proyecto-Titulacion.git
 
 ---
 
 ## Próxima tarea al iniciar
-**S4-06** — Probar flujo de emails (simulado) + S4-07 scheduler con fechas de prueba
-- La IA ya funciona con Groq (free tier, sin tarjeta). Informes 3 y 4 con narrativa completa.
-- Continuar pruebas: emails, scheduler, permisos por rol, casos borde
+**S4-10 (FIX PRIORITARIO)** — `calificaciones` no distingue por grupo → sobreescribe grupos
+- Ver detalle completo del fix en docs/pending.md (sección BUG PRIORITARIO)
+- Resumen: agregar columna `grupo` a calificaciones + migración 003 +
+  ajustar endpoint confirmar (filtro por grupo) + generador_informes +
+  re-subir Excel y regenerar informes
+- Tras el fix: continuar S4-09 (verificar formato .docx final) y cerrar Sprint 4
 
 ## NOTA IMPORTANTE — Proveedor de IA
 - Se usa GROQ (free tier sin tarjeta): AI_PROVIDER=groq, AI_MODEL=groq/llama-3.3-70b-versatile
@@ -161,13 +164,16 @@ Objetivo: validar con datos reales del Período 67
   - Fix bcrypt==4.0.1 + pydantic[email] en requirements.txt
 - [x] S4-04: Informe 3 (área 2, id=3) — 8 asignaturas, narrativa IA Groq completa + .docx
 - [x] S4-05: Informe 4 (área 3, id=4) — 10 asignaturas, 10 sub-análisis IA completos + .docx
-- [ ] S4-06: Probar flujo de emails (simulado)
-- [ ] S4-07: Probar scheduler con fechas de prueba
-- [ ] S4-08: Probar edición de secciones en panel jefe
-- [ ] S4-09: Probar descarga .docx y verificar formato
-- [ ] S4-10: Corregir bugs encontrados
-- [ ] S4-11: Casos borde: Excel con parciales en 0, docente sin respuesta, grupos 1 estudiante
-- [ ] S4-12: Pruebas de permisos por rol
+- [x] S4-06: Flujo emails simulado — 39 notificaciones con token Reply-To persistidas
+      + recepción simulada (POST /flujo/simular-respuesta correlaciona por token).
+      Fix: notificaciones ahora se guardan (informe_id nullable + consejo_id, migración 002)
+- [x] S4-07: Scheduler validado — programa 2 días antes, ignora fechas pasadas,
+      polling IMAP cada 15 min, restaura jobs PENDIENTE al reiniciar
+- [x] S4-08: Edición secciones panel jefe — FIX: columna JSON no persistía (flag_modified)
+- [ ] S4-09: Probar descarga .docx y verificar formato (descarga ya verificada en S4-04, falta abrir/revisar formato)
+- [~] S4-10: Bug calificaciones-sin-grupo IDENTIFICADO (ver pending.md) — FIX pendiente próxima sesión
+- [~] S4-11: Caso parciales-en-0 OK (solo_nota_final). Falta: docente sin respuesta, grupos 1 estudiante
+- [x] S4-12: Permisos por rol validados — docente→director=403, sin token=401, token inválido=401
 - [ ] S4-13: Revisar calidad narrativa de análisis IA
 - [ ] S4-14: Ajustar prompts según resultados
 - [ ] S4-15: CLAUDE.md Sprint 4 completado
