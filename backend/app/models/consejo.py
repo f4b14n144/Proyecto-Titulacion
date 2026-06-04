@@ -17,3 +17,4 @@ class ConsejoCarrera(Base):
     periodo = relationship("PeriodoAcademico", back_populates="consejos")
     calificaciones = relationship("Calificacion", back_populates="consejo")
     informes = relationship("Informe", back_populates="consejo")
+    notificaciones = relationship("Notificacion", back_populates="consejo")

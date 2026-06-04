@@ -63,15 +63,17 @@ def _enviar_notificaciones(db: Session, consejo: ConsejoCarrera) -> None:
 
             token = str(uuid.uuid4())
 
-            # Registrar notificación
+            # Registrar la notificación a nivel de consejo (informe_id se asocia luego)
             noti = Notificacion(
-                informe_id=None,  # Se actualizará cuando se genere el informe en Sprint 3
+                informe_id=None,
+                consejo_id=consejo.id,
                 destinatario_email=docente.email_institucional,
                 tipo="DOCENTE_SUGERENCIA",
                 reply_to_token=token,
             )
-            # No guardar informe_id = None por FK constraint — solo guardamos si tenemos informe
-            # Por ahora solo enviamos email sin registrar en DB
+            db.add(noti)
+            db.flush()  # persistir para que el token quede disponible para correlación IMAP
+
             try:
                 enviar_email_docente(
                     destinatario=docente.email_institucional,
@@ -79,10 +81,13 @@ def _enviar_notificaciones(db: Session, consejo: ConsejoCarrera) -> None:
                     reply_to_token=token,
                     consejo_id=consejo.id,
                 )
-                logger.info(f"Email enviado a docente {docente.email_institucional}")
+                logger.info(f"Notificación {noti.id} registrada para docente {docente.email_institucional}")
             except Exception as e:
                 logger.warning(f"No se pudo enviar email a {docente.email_institucional}: {e}")
 
+        db.commit()
+
     except Exception as e:
+        db.rollback()
         logger.warning(f"Error enviando notificaciones consejo {consejo.id}: {e}")
         # No propagar — el flujo continúa aunque falle el correo
