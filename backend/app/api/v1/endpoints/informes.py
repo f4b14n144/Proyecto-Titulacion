@@ -2,6 +2,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 from pydantic import BaseModel, ConfigDict
 from typing import Any, Optional
 from app.core.deps import get_db, get_current_user, require_role
@@ -72,10 +73,14 @@ def actualizar_secciones(
     if not informe:
         raise HTTPException(status_code=404, detail="Informe no encontrado")
 
-    contenido = informe.contenido_json or {}
-    contenido["secciones"] = {**contenido.get("secciones", {}), **payload.secciones}
+    # Construir un dict NUEVO para que SQLAlchemy detecte el cambio en la columna JSON
+    # (reasignar el mismo objeto no marca la fila como modificada)
+    contenido_actual = informe.contenido_json or {}
+    contenido = dict(contenido_actual)
+    contenido["secciones"] = {**contenido_actual.get("secciones", {}), **payload.secciones}
     informe.contenido_json = contenido
     informe.estado = "REVISANDO"
+    flag_modified(informe, "contenido_json")
     db.commit()
     return {"data": InformeOut.model_validate(informe), "message": "Secciones actualizadas", "success": True}
 
