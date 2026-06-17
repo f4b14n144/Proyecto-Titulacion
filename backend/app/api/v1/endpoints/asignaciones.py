@@ -12,6 +12,7 @@ from app.schemas.asignacion import AsignacionCreate, AsignacionOut
 router = APIRouter()
 
 _solo_director = require_role("DIRECTOR_CARRERA")
+_director_o_jefe = require_role("DIRECTOR_CARRERA", "JEFE_AREA")  # lectura compartida
 
 
 @router.get("/", response_model=dict)
@@ -19,7 +20,7 @@ def listar_asignaciones(
     periodo_id: Optional[int] = Query(None),
     area_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
-    _: Usuario = Depends(_solo_director),
+    _: Usuario = Depends(_director_o_jefe),
 ):
     q = db.query(AsignacionDocente)
     if periodo_id:

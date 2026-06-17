@@ -9,13 +9,14 @@ from app.schemas.periodo import PeriodoCreate, PeriodoUpdate, PeriodoOut
 router = APIRouter()
 
 _solo_director = require_role("DIRECTOR_CARRERA")
+_director_o_jefe = require_role("DIRECTOR_CARRERA", "JEFE_AREA")  # lectura compartida
 
 
 @router.get("/", response_model=dict)
 def listar_periodos(
     activo: Optional[bool] = Query(None),
     db: Session = Depends(get_db),
-    _: Usuario = Depends(_solo_director),
+    _: Usuario = Depends(_director_o_jefe),
 ):
     q = db.query(PeriodoAcademico)
     if activo is not None:
