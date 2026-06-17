@@ -179,7 +179,20 @@ def generar_borrador(
     if fn is None:
         raise HTTPException(status_code=400, detail="tipo_informe debe ser 1, 2, 3 o 4")
 
-    background_tasks.add_task(fn, db, payload.consejo_id, payload.area_id)
+    # IMPORTANTE: el BackgroundTask NO debe reutilizar la sesión del request
+    # (se cierra al responder). Cada tarea abre y cierra su propia sesión.
+    def _ejecutar(consejo_id: int, area_id: int):
+        from app.db.session import SessionLocal
+        from loguru import logger
+        tarea_db = SessionLocal()
+        try:
+            fn(tarea_db, consejo_id, area_id)
+        except Exception as e:
+            logger.exception(f"Error generando informe tipo {payload.tipo_informe}: {e}")
+        finally:
+            tarea_db.close()
+
+    background_tasks.add_task(_ejecutar, payload.consejo_id, payload.area_id)
 
     return {
         "data": {

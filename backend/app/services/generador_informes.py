@@ -230,12 +230,19 @@ def generar_informe_3(db: Session, consejo_id: int, area_id: int) -> Informe:
     # Parte B: calificaciones interciclo
     asignaciones = _asignaturas_del_area(db, area_id, consejo.periodo_id)
     calificaciones_data = []
+    vistos: set[tuple[int, str]] = set()  # evita duplicar (asignatura, grupo) co-dictados
 
     for asig_doc in asignaciones:
+        clave = (asig_doc.asignatura_id, asig_doc.grupo)
+        if clave in vistos:
+            continue
+        vistos.add(clave)
+
         cal = db.query(Calificacion).filter(
             Calificacion.asignatura_id == asig_doc.asignatura_id,
             Calificacion.consejo_id == consejo_id,
             Calificacion.tipo == "INTERCICLO",
+            Calificacion.grupo == asig_doc.grupo,
         ).first()
         if not cal:
             continue
@@ -289,12 +296,19 @@ def generar_informe_4(db: Session, consejo_id: int, area_id: int) -> Informe:
     asignaciones = _asignaturas_del_area(db, area_id, consejo.periodo_id)
     calificaciones_data = []
     resumen_area = []
+    vistos: set[tuple[int, str]] = set()  # evita duplicar (asignatura, grupo) co-dictados
 
     for asig_doc in asignaciones:
+        clave = (asig_doc.asignatura_id, asig_doc.grupo)
+        if clave in vistos:
+            continue
+        vistos.add(clave)
+
         cal = db.query(Calificacion).filter(
             Calificacion.asignatura_id == asig_doc.asignatura_id,
             Calificacion.consejo_id == consejo_id,
             Calificacion.tipo == "FINAL",
+            Calificacion.grupo == asig_doc.grupo,
         ).first()
         if not cal:
             continue

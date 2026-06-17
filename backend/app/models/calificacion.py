@@ -10,6 +10,7 @@ class Calificacion(Base):
     id = Column(Integer, primary_key=True)
     asignatura_id = Column(Integer, ForeignKey("asignaturas.id"), nullable=False)
     consejo_id = Column(Integer, ForeignKey("consejos_carrera.id"), nullable=False)
+    grupo = Column(String, nullable=True)  # G1, G2, ... — distingue grupos de una misma asignatura
     tipo = Column(String, nullable=False)  # INTERCICLO | FINAL
     datos_json = Column(JSON, nullable=False)
     # {"estudiantes": [{"parcial1": N, "parcial2": N,

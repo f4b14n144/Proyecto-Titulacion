@@ -35,5 +35,6 @@ class CalificacionOut(BaseModel):
     id: int
     asignatura_id: int
     consejo_id: int
+    grupo: Optional[str] = None
     tipo: str
     datos_json: Any

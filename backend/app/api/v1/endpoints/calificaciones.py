@@ -154,11 +154,13 @@ async def confirmar_calificaciones(
 
     guardados: list[CalificacionOut] = []
     for r in resultados:
-        # Sobreescribir si ya existe calificación para esta asignatura+consejo+tipo
+        # Sobreescribir solo si ya existe para esta asignatura+consejo+tipo+GRUPO
+        # (sin el grupo, asignaturas con varios grupos se pisaban entre sí)
         existente = db.query(Calificacion).filter(
             Calificacion.asignatura_id == r["asignatura_id"],
             Calificacion.consejo_id == consejo_id,
             Calificacion.tipo == tipo.upper(),
+            Calificacion.grupo == r["grupo"],
         ).first()
 
         datos_json = {
@@ -176,6 +178,7 @@ async def confirmar_calificaciones(
             nueva = Calificacion(
                 asignatura_id=r["asignatura_id"],
                 consejo_id=consejo_id,
+                grupo=r["grupo"],
                 tipo=tipo.upper(),
                 datos_json=datos_json,
             )
