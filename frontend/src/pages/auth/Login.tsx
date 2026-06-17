@@ -1,4 +1,4 @@
-import { useState, FormEvent } from 'react'
+import { useState, useEffect, FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 
@@ -10,11 +10,13 @@ export default function Login() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  // Si ya está autenticado, redirigir
-  if (user) {
-    const dest = user.rol === 'DIRECTOR_CARRERA' ? '/director' : '/jefe'
-    navigate(dest, { replace: true })
-  }
+  // Redirigir cuando el usuario queda autenticado (en efecto, no durante el render)
+  useEffect(() => {
+    if (user) {
+      const dest = user.rol === 'DIRECTOR_CARRERA' ? '/director' : '/jefe'
+      navigate(dest, { replace: true })
+    }
+  }, [user, navigate])
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
