@@ -47,13 +47,26 @@ def listar_asignaciones(
     periodo_id: Optional[int] = Query(None),
     area_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
-    _: Usuario = Depends(_director_o_jefe),
+    current_user: Usuario = Depends(_director_o_jefe),
 ):
+    from app.models.jefatura import JefaturaArea
+
     q = db.query(AsignacionDocente)
     if periodo_id:
         q = q.filter(AsignacionDocente.periodo_id == periodo_id)
-    if area_id:
+
+    # Si es JEFE_AREA, solo puede ver asignaciones de SU(S) área(s) — se impone en backend
+    if current_user.rol.nombre == "JEFE_AREA":
+        jq = db.query(JefaturaArea.area_id).filter(JefaturaArea.usuario_id == current_user.id)
+        if periodo_id:
+            jq = jq.filter(JefaturaArea.periodo_id == periodo_id)
+        areas_jefe = [a_id for (a_id,) in jq.all()]
+        if not areas_jefe:
+            return {"data": [], "message": "Sin jefatura en el período", "success": True}
+        q = q.join(Asignatura).filter(Asignatura.area_id.in_(areas_jefe))
+    elif area_id:
         q = q.join(Asignatura).filter(Asignatura.area_id == area_id)
+
     asignaciones = q.all()
     return {"data": [AsignacionOut.model_validate(a) for a in asignaciones], "message": "OK", "success": True}
 

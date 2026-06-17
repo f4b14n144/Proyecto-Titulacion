@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import api from '../../services/api'
+import { descargarInforme } from '../../services/informes.service'
 import type { ApiResponse } from '../../types'
 
 interface Consejo { id: number; periodo_id: number; fecha_consejo: string }
@@ -189,10 +190,10 @@ export default function Informe4() {
             {generando ? 'Generando...' : 'Regenerar .docx'}
           </button>
           {informe.ruta_docx && (
-            <a href={`/api/v1/informes/${informe.id}/descargar`}
+            <button type="button" onClick={() => descargarInforme(informe.id)}
               className="border border-ups-blue text-ups-blue px-5 py-2 rounded-lg text-sm font-medium hover:bg-ups-blue hover:text-white transition">
               Descargar .docx
-            </a>
+            </button>
           )}
         </div>
       )}
