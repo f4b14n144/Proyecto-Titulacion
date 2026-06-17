@@ -2,6 +2,28 @@
 
 ---
 
+## 2026-06-17 — Sesión — Sprint 4 COMPLETADO
+
+### Qué se hizo
+- **S4-10** fix bug calificaciones-sin-grupo: columna `grupo` + migración 003 +
+  endpoint confirmar filtra por grupo + generador filtra por grupo.
+  Validado: ÁLGEBRA LINEAL conserva sus 4 grupos (antes quedaba 1).
+- **Bug 2 corregido:** `generar-borrador` reutilizaba la sesión DB del request en el
+  BackgroundTask → el informe 4 no terminaba. Ahora cada tarea abre su propia sesión.
+- **Bug 3 corregido:** informes duplicaban asignatura-grupo co-dictada por 2 docentes
+  → dedup por (asignatura_id, grupo).
+- **S4-09** .docx verificado: generadas las plantillas Jinja2 (crear_plantillas.py);
+  informe sale con encabezado UPS + 10 sub-análisis IA + acciones + firmas.
+- **S4-13/14** narrativa IA (Groq llama-3.3-70b) verificada: profesional, español formal.
+- Cuentas de prueba creadas (seed_test_users.py): director/jefe/docente con roles.
+- Front validado: sirve HTML, jefe loguea→ve informe de su área→descarga .docx.
+
+### Estado
+Sprints 0-4 completos. Sistema funcional end-to-end con datos reales P67.
+Próximo: Sprint 5 (ajustes finales + demo) — entra cuando llegue feedback del tutor.
+
+---
+
 ## 2026-05-23 — Sesión 1 y 2 — Sprint 0 completo
 
 ### Qué se hizo
