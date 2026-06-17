@@ -14,20 +14,24 @@
 ---
 
 ## Estado general
-Fecha última actualización: 2026-06-04
-Sprint activo: 4 (Sprints 0-3 completados; S4-06/07/08/12 OK, S4-10 fix pendiente)
+Fecha última actualización: 2026-06-17
+Sprint activo: 5 (Sprints 0-4 completados)
 Rama Git: main
 Repo: https://github.com/f4b14n144/Proyecto-Titulacion.git
 
 ---
 
 ## Próxima tarea al iniciar
-**S4-10 (FIX PRIORITARIO)** — `calificaciones` no distingue por grupo → sobreescribe grupos
-- Ver detalle completo del fix en docs/pending.md (sección BUG PRIORITARIO)
-- Resumen: agregar columna `grupo` a calificaciones + migración 003 +
-  ajustar endpoint confirmar (filtro por grupo) + generador_informes +
-  re-subir Excel y regenerar informes
-- Tras el fix: continuar S4-09 (verificar formato .docx final) y cerrar Sprint 4
+**Sprint 5** — Ajustes finales y preparación demo (Taller Pitch 15-16/07/2026)
+- S5-01: incorporar observaciones del tutor
+- S5-02/03/04: refinar UI, mensajes de error, loading states
+- S5-10: script de demo reproducible
+- Las revisiones/cambios que mande el tutor entran aquí
+
+## Cuentas de prueba (creadas con seed_test_users.py)
+- Director: director@ups.edu.ec / director123
+- Jefe de área: jefe@ups.edu.ec / jefe123  (Área: Programación y Software)
+- Docente: docente@ups.edu.ec / docente123
 
 ## NOTA IMPORTANTE — Proveedor de IA
 - Se usa GROQ (free tier sin tarjeta): AI_PROVIDER=groq, AI_MODEL=groq/llama-3.3-70b-versatile
@@ -153,7 +157,7 @@ Objetivo: integración IA y generación completa de informes
 - [x] S3-14: Informe1.tsx — 6 secciones editables + campo director + descarga
 - [x] S3-15/16: Sprint 3 completado y CLAUDE.md actualizado
 
-## SPRINT 4 — PENDIENTE ⏳
+## SPRINT 4 — COMPLETADO ✅
 Objetivo: validar con datos reales del Período 67
 
 - [x] S4-01: seed_p67.py — 39 docentes, 44 asignaturas, 83 asignaciones P67
@@ -170,13 +174,16 @@ Objetivo: validar con datos reales del Período 67
 - [x] S4-07: Scheduler validado — programa 2 días antes, ignora fechas pasadas,
       polling IMAP cada 15 min, restaura jobs PENDIENTE al reiniciar
 - [x] S4-08: Edición secciones panel jefe — FIX: columna JSON no persistía (flag_modified)
-- [ ] S4-09: Probar descarga .docx y verificar formato (descarga ya verificada en S4-04, falta abrir/revisar formato)
-- [~] S4-10: Bug calificaciones-sin-grupo IDENTIFICADO (ver pending.md) — FIX pendiente próxima sesión
-- [~] S4-11: Caso parciales-en-0 OK (solo_nota_final). Falta: docente sin respuesta, grupos 1 estudiante
+- [x] S4-09: .docx verificado — plantillas Jinja2 generadas (crear_plantillas.py); informe 4
+      sale con encabezado UPS + 10 sub-análisis + acciones + firmas (formato institucional)
+- [x] S4-10: FIX calificaciones-sin-grupo — columna grupo + migración 003 + endpoint + generador.
+      Validado: ÁLGEBRA conserva G21/G3/G4/G5. Tambien 2 bugs extra: BackgroundTask reusaba
+      sesión DB del request (informe 4 no terminaba); dedup (asignatura,grupo) co-dictada
+- [x] S4-11: Casos borde OK — parciales-en-0 (solo_nota_final), SIMULACIÓN G1 con 1 estudiante
 - [x] S4-12: Permisos por rol validados — docente→director=403, sin token=401, token inválido=401
-- [ ] S4-13: Revisar calidad narrativa de análisis IA
-- [ ] S4-14: Ajustar prompts según resultados
-- [ ] S4-15: CLAUDE.md Sprint 4 completado
+- [x] S4-13: Calidad narrativa IA verificada — análisis profesional español formal (Groq llama-3.3-70b)
+- [x] S4-14: Prompts funcionan bien con datos reales; ajustes finos quedan para Sprint 5 si tutor lo pide
+- [x] S4-15: CLAUDE.md Sprint 4 COMPLETADO
 
 ## SPRINTS PENDIENTES
 - Sprint 5: Ajustes finales, UI, demo Taller Pitch 15-16/07/2026

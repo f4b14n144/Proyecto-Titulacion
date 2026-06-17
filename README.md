@@ -30,7 +30,19 @@ docker compose exec backend alembic upgrade head
 
 # 5. Cargar datos iniciales (roles, admin, áreas)
 docker compose exec backend python -m app.db.seed
+
+# 6. Generar las plantillas .docx base (Jinja2) — requerido para informes con formato
+docker compose exec backend python app/static/plantillas/crear_plantillas.py
+
+# 7. (Opcional) Datos reales del Período 67 para pruebas
+docker compose exec backend python -m app.db.seed_p67
+# 8. (Opcional) Cuentas de prueba por rol (director / jefe / docente)
+docker compose exec backend python -m app.db.seed_test_users
 ```
+
+> **Nota:** las plantillas `.docx` se generan con el script (paso 6) y no se
+> versionan en el repo. Sin ellas, los informes salen con un formato básico de
+> respaldo en lugar del formato institucional completo.
 
 ## URLs
 
