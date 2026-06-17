@@ -1,6 +1,7 @@
 import { useState, useEffect, FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
+import { destinoPorRol } from '../../App'
 
 export default function Login() {
   const { login, user } = useAuth()
@@ -13,8 +14,7 @@ export default function Login() {
   // Redirigir cuando el usuario queda autenticado (en efecto, no durante el render)
   useEffect(() => {
     if (user) {
-      const dest = user.rol === 'DIRECTOR_CARRERA' ? '/director' : '/jefe'
-      navigate(dest, { replace: true })
+      navigate(destinoPorRol(user.rol), { replace: true })
     }
   }, [user, navigate])
 

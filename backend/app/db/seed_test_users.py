@@ -76,6 +76,32 @@ def seed_test_users():
                 db.add(JefaturaArea(usuario_id=jefe.id, area_id=area.id, periodo_id=periodo.id))
                 print(f"  Jefatura creada: {jefe.email_institucional} → {area.nombre} ({periodo.nombre})")
 
+        # Asignar un par de asignaturas al docente de prueba (para que su panel muestre datos)
+        from app.models.asignatura import Asignatura
+        from app.models.asignacion import AsignacionDocente
+        docente = creados.get("DOCENTE")
+        if periodo and docente and area:
+            asigs = (
+                db.query(Asignatura)
+                .filter(Asignatura.area_id == area.id)
+                .order_by(Asignatura.nombre)
+                .limit(2)
+                .all()
+            )
+            for asig in asigs:
+                ya = db.query(AsignacionDocente).filter(
+                    AsignacionDocente.usuario_id == docente.id,
+                    AsignacionDocente.asignatura_id == asig.id,
+                    AsignacionDocente.periodo_id == periodo.id,
+                    AsignacionDocente.grupo == "G1",
+                ).first()
+                if not ya:
+                    db.add(AsignacionDocente(
+                        usuario_id=docente.id, asignatura_id=asig.id,
+                        periodo_id=periodo.id, grupo="G1",
+                    ))
+                    print(f"  Asignación docente prueba: {asig.nombre} G1")
+
         db.commit()
         print("\n=== CUENTAS DE PRUEBA LISTAS ===")
         print("  Director: director@ups.edu.ec / director123")

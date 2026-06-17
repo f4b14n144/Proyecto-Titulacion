@@ -19,6 +19,14 @@ import JefeDashboard from './pages/jefe_area/Dashboard'
 import Informe2 from './pages/jefe_area/Informe2'
 import Informe3 from './pages/jefe_area/Informe3'
 import Informe4 from './pages/jefe_area/Informe4'
+import DocenteDashboard from './pages/docente/Dashboard'
+
+// Destino del panel según rol
+export function destinoPorRol(rol?: string): string {
+  if (rol === 'DIRECTOR_CARRERA') return '/director'
+  if (rol === 'JEFE_AREA') return '/jefe'
+  return '/docente'
+}
 
 function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -36,7 +44,7 @@ function RootRedirect() {
   const { user, loading } = useAuth()
   if (loading) return null
   if (!user) return <Navigate to="/login" replace />
-  return <Navigate to={user.rol === 'DIRECTOR_CARRERA' ? '/director' : '/jefe'} replace />
+  return <Navigate to={destinoPorRol(user.rol)} replace />
 }
 
 export default function App() {
@@ -79,6 +87,20 @@ export default function App() {
                 <Route path="informe2" element={<Informe2 />} />
                 <Route path="informe3" element={<Informe3 />} />
                 <Route path="informe4" element={<Informe4 />} />
+              </Routes>
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Rutas del docente */}
+      <Route
+        path="/docente/*"
+        element={
+          <ProtectedRoute roles={['DOCENTE']}>
+            <AppLayout>
+              <Routes>
+                <Route index element={<DocenteDashboard />} />
               </Routes>
             </AppLayout>
           </ProtectedRoute>

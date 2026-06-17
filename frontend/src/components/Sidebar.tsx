@@ -21,6 +21,10 @@ const jefeLinks = [
   { to: '/jefe/informe4', label: 'Informe 4 — Final' },
 ]
 
+const docenteLinks = [
+  { to: '/docente', label: 'Dashboard', exact: true },
+]
+
 const linkClass = ({ isActive }: { isActive: boolean }) =>
   `block px-4 py-2 rounded text-sm transition ${
     isActive
@@ -30,7 +34,10 @@ const linkClass = ({ isActive }: { isActive: boolean }) =>
 
 export default function Sidebar() {
   const { user } = useAuth()
-  const links = user?.rol === 'DIRECTOR_CARRERA' ? directorLinks : jefeLinks
+  const links =
+    user?.rol === 'DIRECTOR_CARRERA' ? directorLinks
+    : user?.rol === 'JEFE_AREA' ? jefeLinks
+    : docenteLinks
 
   return (
     <aside className="w-56 bg-white border-r h-full flex-shrink-0 py-4">

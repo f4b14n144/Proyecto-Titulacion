@@ -2,7 +2,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
-from app.core.deps import get_db, require_role
+from app.core.deps import get_db, require_role, get_current_user
 from app.models.asignacion import AsignacionDocente
 from app.models.usuario import Usuario
 from app.models.asignatura import Asignatura
@@ -13,6 +13,33 @@ router = APIRouter()
 
 _solo_director = require_role("DIRECTOR_CARRERA")
 _director_o_jefe = require_role("DIRECTOR_CARRERA", "JEFE_AREA")  # lectura compartida
+
+
+@router.get("/mias", response_model=dict)
+def mis_asignaciones(
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Asignaciones del docente autenticado (asignatura + grupo + período)."""
+    rows = (
+        db.query(AsignacionDocente, Asignatura, PeriodoAcademico)
+        .join(Asignatura, AsignacionDocente.asignatura_id == Asignatura.id)
+        .join(PeriodoAcademico, AsignacionDocente.periodo_id == PeriodoAcademico.id)
+        .filter(AsignacionDocente.usuario_id == current_user.id)
+        .all()
+    )
+    data = [
+        {
+            "id": asig.id,
+            "asignatura": asignatura.nombre,
+            "codigo": asignatura.codigo,
+            "grupo": asig.grupo,
+            "periodo": periodo.nombre,
+            "periodo_activo": periodo.activo,
+        }
+        for asig, asignatura, periodo in rows
+    ]
+    return {"data": data, "message": f"{len(data)} asignación(es)", "success": True}
 
 
 @router.get("/", response_model=dict)
