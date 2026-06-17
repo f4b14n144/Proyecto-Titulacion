@@ -1,5 +1,5 @@
 import api from './api'
-import type { TokenResponse, AuthUser, ApiResponse } from '../types'
+import type { TokenResponse, AuthUser } from '../types'
 
 export const authService = {
   async login(email: string, password: string): Promise<TokenResponse> {
@@ -8,8 +8,9 @@ export const authService = {
   },
 
   async me(): Promise<AuthUser> {
-    const { data } = await api.get<ApiResponse<AuthUser>>('/auth/me')
-    return data.data
+    // /auth/me devuelve el objeto directo (no envuelto en {data,...}), igual que login
+    const { data } = await api.get<AuthUser>('/auth/me')
+    return data
   },
 
   logout() {
