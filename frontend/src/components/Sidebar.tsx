@@ -16,6 +16,7 @@ const directorLinks = [
 
 const jefeLinks = [
   { to: '/jefe', label: 'Dashboard', exact: true },
+  { to: '/jefe/informe1', label: 'Informe 1 — Centro Docente' },
   { to: '/jefe/informe2', label: 'Informe 2 — AVAC' },
   { to: '/jefe/informe3', label: 'Informe 3 — Visitas' },
   { to: '/jefe/informe4', label: 'Informe 4 — Final' },

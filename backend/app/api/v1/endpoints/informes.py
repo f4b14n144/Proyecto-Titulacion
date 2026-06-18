@@ -15,6 +15,25 @@ router = APIRouter()
 DOCX_DIR = Path("app/static/docx")
 
 _solo_director = require_role("DIRECTOR_CARRERA")
+_director_o_jefe = require_role("DIRECTOR_CARRERA", "JEFE_AREA")
+
+
+def _validar_area_jefe(db: Session, usuario: Usuario, area_id: int, tipo_informe: int) -> None:
+    """
+    Un jefe solo puede generar informes por área (2,3,4) de SU área.
+    El Informe 1 (Centro Docente) lo pueden generar director o jefe sin restricción de área.
+    """
+    if usuario.rol.nombre != "JEFE_AREA":
+        return
+    if tipo_informe == 1:
+        return
+    from app.models.jefatura import JefaturaArea
+    es_suya = db.query(JefaturaArea).filter(
+        JefaturaArea.usuario_id == usuario.id,
+        JefaturaArea.area_id == area_id,
+    ).first()
+    if not es_suya:
+        raise HTTPException(status_code=403, detail="Solo puedes generar informes de tu área")
 
 
 class InformeOut(BaseModel):
@@ -163,11 +182,11 @@ def generar_borrador(
     payload: GenerarBorradorRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    _: Usuario = Depends(_solo_director),
+    current_user: Usuario = Depends(_director_o_jefe),
 ):
     """
     Genera el borrador del informe solicitado usando IA.
-    Los informes 3 y 4 pueden tardar 30-90 seg según la cantidad de asignaturas.
+    Director: cualquier informe. Jefe: informes de su área (2,3,4) + Informe 1.
     El endpoint responde inmediatamente y el trabajo ocurre en background.
     """
     from app.services.generador_informes import (
@@ -178,6 +197,8 @@ def generar_borrador(
     fn = generadores.get(payload.tipo_informe)
     if fn is None:
         raise HTTPException(status_code=400, detail="tipo_informe debe ser 1, 2, 3 o 4")
+
+    _validar_area_jefe(db, current_user, payload.area_id, payload.tipo_informe)
 
     # IMPORTANTE: el BackgroundTask NO debe reutilizar la sesión del request
     # (se cierra al responder). Cada tarea abre y cierra su propia sesión.
