@@ -8,7 +8,7 @@ interface Periodo { id: number; nombre: string; activo: boolean }
 interface Asignacion { id: number; usuario_id: number; asignatura_id: number; periodo_id: number; grupo: string }
 interface Usuario { id: number; nombre_completo: string }
 interface Asignatura { id: number; nombre: string; area_id: number }
-interface Informe { id: number; contenido_json: Record<string, unknown>; estado: string; ruta_docx: string | null }
+interface Informe { id: number; tipo_informe: number; contenido_json: Record<string, unknown>; estado: string; ruta_docx: string | null }
 
 const PARAMS_BOOL = [
   { campo: 'silabo_cargado', label: 'Sílabo cargado' },

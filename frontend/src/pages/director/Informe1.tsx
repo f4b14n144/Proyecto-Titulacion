@@ -5,7 +5,7 @@ import type { ApiResponse } from '../../types'
 
 interface Consejo { id: number; periodo_id: number; fecha_consejo: string }
 interface Periodo { id: number; nombre: string; activo: boolean }
-interface Informe { id: number; contenido_json: Record<string, unknown>; estado: string; ruta_docx: string | null }
+interface Informe { id: number; tipo_informe: number; contenido_json: Record<string, unknown>; estado: string; ruta_docx: string | null }
 
 const SECCIONES: { campo: string; label: string; placeholder: string }[] = [
   { campo: 'agenda', label: '1. Agenda tratada en la reunión', placeholder: 'Describa los puntos tratados en la reunión del Centro Docente...' },

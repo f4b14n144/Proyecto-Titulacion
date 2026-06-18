@@ -78,7 +78,6 @@ export default function Asignaciones() {
     const a = asignaturas.find((a) => a.id === id)
     return a ? `${a.codigo} — ${a.nombre}` : `#${id}`
   }
-  const nombrePeriodo = (id: number) => periodos.find((p) => p.id === id)?.nombre ?? `#${id}`
 
   const asignarJefatura = async () => {
     if (!fJef.usuario_id || !fJef.area_id || !fJef.periodo_id) {

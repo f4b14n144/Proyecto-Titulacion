@@ -5,7 +5,7 @@ import type { ApiResponse } from '../../types'
 
 interface Consejo { id: number; periodo_id: number; fecha_consejo: string }
 interface Periodo { id: number; nombre: string; activo: boolean }
-interface Informe { id: number; contenido_json: Record<string, unknown>; estado: string; ruta_docx: string | null }
+interface Informe { id: number; tipo_informe: number; contenido_json: Record<string, unknown>; estado: string; ruta_docx: string | null }
 
 const SUB_ANALISIS = [
   { campo: 'analisis_general', label: '1. Análisis general' },
@@ -130,7 +130,7 @@ export default function Informe4() {
           </div>
 
           {/* Estadísticos */}
-          {cal.nota_final && (
+          {Boolean(cal.nota_final) && (
             <div className="grid grid-cols-4 gap-2 text-xs text-center p-3 bg-gray-50 border-b">
               {[
                 ['Promedio NF', (cal.nota_final as Record<string, unknown>)?.promedio],
@@ -166,15 +166,15 @@ export default function Informe4() {
       ))}
 
       {/* Análisis consolidado área */}
-      {informe?.contenido_json?.analisis_consolidado_area && (
+      {Boolean(informe?.contenido_json?.analisis_consolidado_area) && (
         <div className="bg-white rounded-xl border p-5 mb-5">
           <h2 className="font-semibold text-gray-700 mb-3">Análisis Consolidado del Área</h2>
           <p className="text-sm text-gray-700 italic mb-3">
-            {String(informe.contenido_json.analisis_consolidado_area)}
+            {String(informe?.contenido_json?.analisis_consolidado_area ?? '')}
           </p>
           <h3 className="font-medium text-gray-600 mb-1 text-sm">Acciones Generales</h3>
           <p className="text-sm text-gray-700 italic">
-            {String(informe.contenido_json.acciones_generales_area ?? '')}
+            {String(informe?.contenido_json?.acciones_generales_area ?? '')}
           </p>
         </div>
       )}

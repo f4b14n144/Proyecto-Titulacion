@@ -64,6 +64,15 @@ def listar_informes(
         q = q.filter(Informe.consejo_id == consejo_id)
     if area_id:
         q = q.filter(Informe.area_id == area_id)
+
+    # Si es JEFE_AREA, solo ve los informes de SU(S) área(s) + el Informe 1 (compartido)
+    if current_user.rol.nombre == "JEFE_AREA":
+        from sqlalchemy import or_
+        from app.models.jefatura import JefaturaArea
+        areas_jefe = [a_id for (a_id,) in
+                      db.query(JefaturaArea.area_id).filter(JefaturaArea.usuario_id == current_user.id).all()]
+        q = q.filter(or_(Informe.area_id.in_(areas_jefe or [-1]), Informe.tipo_informe == 1))
+
     informes = q.all()
     return {"data": [InformeOut.model_validate(i) for i in informes], "message": "OK", "success": True}
 

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import api from '../../services/api'
-import { formatFecha, formatEstado } from '../../utils/formatters'
+import { descargarInforme } from '../../services/informes.service'
+import { formatEstado } from '../../utils/formatters'
 import { useAuth } from '../../hooks/useAuth'
 import type { ApiResponse } from '../../types'
 
@@ -48,9 +49,11 @@ export default function JefeDashboard() {
 
   useEffect(() => {
     Promise.all([
+      api.get<ApiResponse<Informe[]>>('/informes/'),
       api.get<ApiResponse<Consejo[]>>('/consejos/'),
       api.get<ApiResponse<Periodo[]>>('/periodos/'),
-    ]).then(([cRes, pRes]) => {
+    ]).then(([iRes, cRes, pRes]) => {
+      setInformes(iRes.data.data)
       setConsejos(cRes.data.data)
       setPeriodos(pRes.data.data)
     }).catch(() => {}).finally(() => setCargando(false))
@@ -64,7 +67,7 @@ export default function JefeDashboard() {
 
   const descargar = (informe: Informe) => {
     if (informe.ruta_docx) {
-      window.open(`/static/docx/${informe.ruta_docx}`, '_blank')
+      descargarInforme(informe.id).catch(() => {})
     }
   }
 
