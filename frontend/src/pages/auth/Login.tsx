@@ -1,7 +1,7 @@
 import { useState, useEffect, FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
-import { destinoPorRol } from '../../App'
+import { destinoPorRol } from '../../utils/roles'
 
 export default function Login() {
   const { login, user } = useAuth()

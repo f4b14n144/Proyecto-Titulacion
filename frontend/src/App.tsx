@@ -20,13 +20,7 @@ import Informe2 from './pages/jefe_area/Informe2'
 import Informe3 from './pages/jefe_area/Informe3'
 import Informe4 from './pages/jefe_area/Informe4'
 import DocenteDashboard from './pages/docente/Dashboard'
-
-// Destino del panel según rol
-export function destinoPorRol(rol?: string): string {
-  if (rol === 'DIRECTOR_CARRERA') return '/director'
-  if (rol === 'JEFE_AREA') return '/jefe'
-  return '/docente'
-}
+import { destinoPorRol } from './utils/roles'
 
 function AppLayout({ children }: { children: React.ReactNode }) {
   return (
