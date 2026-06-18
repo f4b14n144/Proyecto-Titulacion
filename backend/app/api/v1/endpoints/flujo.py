@@ -2,26 +2,38 @@
 Endpoint de control del flujo automático (solo para desarrollo y testing).
 Permite disparar el flujo de un consejo manualmente sin esperar la fecha.
 """
+import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from typing import Optional
 from sqlalchemy.orm import Session
 from app.core.deps import get_db, require_role
 from app.models.consejo import ConsejoCarrera
 from app.models.usuario import Usuario
 from app.models.notificacion import Notificacion
 from app.models.respuesta_docente import RespuestaDocente
+from app.models.asignacion import AsignacionDocente
+from app.models.asignatura import Asignatura
+from app.models.jefatura import JefaturaArea
 from app.core.scheduler import programar_flujo_consejo
 from app.services.flujo_consejo import ejecutar_flujo
+from app.services.mail_service import enviar_email_estudiantes
 from datetime import datetime, timezone
 
 router = APIRouter()
 
 _solo_director = require_role("DIRECTOR_CARRERA")
+_director_o_jefe = require_role("DIRECTOR_CARRERA", "JEFE_AREA")
 
 
 class RespuestaSimuladaIn(BaseModel):
     reply_to_token: str
     contenido: str
+
+
+class NotificarEstudiantesIn(BaseModel):
+    consejo_id: int
+    area_id: Optional[int] = None  # el jefe usa su área; el director puede especificar
 
 
 @router.post("/{consejo_id}/disparar", response_model=dict)
@@ -129,5 +141,80 @@ def simular_respuesta_docente(
             "destinatario": noti.destinatario_email,
         },
         "message": "Respuesta de docente registrada (simulada)",
+        "success": True,
+    }
+
+
+@router.post("/notificar-estudiantes", response_model=dict)
+def notificar_estudiantes(
+    payload: NotificarEstudiantesIn,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(_director_o_jefe),
+):
+    """
+    Notifica a los estudiantes de las materias del área para que, si tienen quejas
+    u observaciones, se acerquen al Jefe de Área. Una notificación por cada
+    materia-grupo (lista de distribución del grupo). Modo simulado si no hay SMTP.
+    """
+    consejo = db.query(ConsejoCarrera).filter(ConsejoCarrera.id == payload.consejo_id).first()
+    if not consejo:
+        raise HTTPException(status_code=404, detail="Consejo no encontrado")
+
+    # Determinar áreas a notificar
+    if current_user.rol.nombre == "JEFE_AREA":
+        areas = [a_id for (a_id,) in db.query(JefaturaArea.area_id).filter(
+            JefaturaArea.usuario_id == current_user.id,
+            JefaturaArea.periodo_id == consejo.periodo_id,
+        ).all()]
+        if not areas:
+            raise HTTPException(status_code=400, detail="No tienes jefatura en el período de este consejo")
+    else:  # DIRECTOR_CARRERA
+        if payload.area_id:
+            areas = [payload.area_id]
+        else:
+            areas = [a_id for (a_id,) in db.query(Asignatura.area_id).distinct().all()]
+
+    # Materias-grupo únicos del área en el período
+    rows = (
+        db.query(AsignacionDocente, Asignatura)
+        .join(Asignatura, AsignacionDocente.asignatura_id == Asignatura.id)
+        .filter(
+            AsignacionDocente.periodo_id == consejo.periodo_id,
+            Asignatura.area_id.in_(areas),
+        )
+        .all()
+    )
+
+    grupos_vistos: set[tuple[int, str]] = set()
+    notificados = []
+    for asig, asignatura in rows:
+        clave = (asignatura.id, asig.grupo)
+        if clave in grupos_vistos:
+            continue
+        grupos_vistos.add(clave)
+
+        # Email de lista del grupo (en producción sería la lista real de distribución)
+        destino = f"estudiantes.{asignatura.codigo.lower().replace('-', '')}.{asig.grupo.lower()}@est.ups.edu.ec"
+        noti = Notificacion(
+            informe_id=None,
+            consejo_id=consejo.id,
+            destinatario_email=destino,
+            tipo="ESTUDIANTE_REPORTE",
+            reply_to_token=str(uuid.uuid4()),
+        )
+        db.add(noti)
+        notificados.append({"asignatura": asignatura.nombre, "grupo": asig.grupo, "destino": destino})
+
+    db.commit()
+
+    # Envío (simulado si no hay SMTP configurado)
+    try:
+        enviar_email_estudiantes([n["destino"] for n in notificados], consejo.id)
+    except Exception:
+        pass
+
+    return {
+        "data": {"total": len(notificados), "notificaciones": notificados},
+        "message": f"Se notificó a estudiantes de {len(notificados)} materia(s)-grupo para reportar al Jefe de Área",
         "success": True,
     }

@@ -32,8 +32,24 @@ export default function Informe3() {
   const [visitas, setVisitas] = useState<Record<number, VisitaRow>>({})
   const [guardando, setGuardando] = useState(false)
   const [generando, setGenerando] = useState(false)
+  const [notificando, setNotificando] = useState(false)
+  const [msgNotif, setMsgNotif] = useState('')
   const [msg, setMsg] = useState('')
   const [error, setError] = useState('')
+
+  const notificarEstudiantes = async () => {
+    if (!consejoId) return
+    setNotificando(true); setMsgNotif('')
+    try {
+      const { data } = await api.post('/flujo/notificar-estudiantes', { consejo_id: Number(consejoId) })
+      setMsgNotif(data.message ?? 'Estudiantes notificados.')
+    } catch (e: unknown) {
+      const m = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      setMsgNotif(m ?? 'No se pudo notificar a los estudiantes.')
+    } finally {
+      setNotificando(false)
+    }
+  }
 
   useEffect(() => {
     Promise.all([
@@ -113,7 +129,7 @@ export default function Informe3() {
       <h1 className="text-2xl font-bold text-gray-800 mb-1">Informe 3 — Visitas Áulicas + Interciclo</h1>
       <p className="text-sm text-gray-500 mb-5">Parte A: checklist de visita | Parte B: análisis calificaciones interciclo</p>
 
-      <div className="mb-5">
+      <div className="mb-5 flex items-center gap-3 flex-wrap">
         <select value={consejoId} onChange={(e) => seleccionar(e.target.value)}
           className="border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-ups-blue focus:outline-none">
           <option value="">Seleccionar Consejo</option>
@@ -121,7 +137,23 @@ export default function Informe3() {
             <option key={c.id} value={c.id}>{nombreP(c.periodo_id)} — {c.fecha_consejo}</option>
           ))}
         </select>
+        {consejoId && (
+          <button onClick={notificarEstudiantes} disabled={notificando}
+            className="bg-ups-red text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700 transition disabled:opacity-60">
+            {notificando ? 'Notificando...' : '✉ Notificar a estudiantes'}
+          </button>
+        )}
       </div>
+
+      {msgNotif && (
+        <div className="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded-lg mb-4 text-sm">
+          {msgNotif}
+          <p className="text-xs text-blue-600 mt-1">
+            Se invita a los estudiantes de las materias del área a acercarse al Jefe de Área
+            si tienen quejas u observaciones.
+          </p>
+        </div>
+      )}
 
       {/* PARTE A */}
       {asignaciones.length > 0 && (
