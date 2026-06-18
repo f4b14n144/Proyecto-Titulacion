@@ -13,15 +13,58 @@ from docx import Document
 from docx.shared import Pt, Inches, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
+from docx.oxml import OxmlElement
 import copy
 
 DIR = Path(__file__).parent
+LOGO = DIR.parent / "logo-ups.jpg"  # app/static/logo-ups.jpg
 
 UPS_BLUE = RGBColor(0x00, 0x3D, 0xA5)
 
 
+def _add_campo(parrafo, instr: str):
+    """Inserta un campo de Word (PAGE / NUMPAGES) en un párrafo."""
+    run = parrafo.add_run()
+    begin = OxmlElement("w:fldChar")
+    begin.set(qn("w:fldCharType"), "begin")
+    instr_el = OxmlElement("w:instrText")
+    instr_el.set(qn("xml:space"), "preserve")
+    instr_el.text = instr
+    end = OxmlElement("w:fldChar")
+    end.set(qn("w:fldCharType"), "end")
+    run._r.append(begin)
+    run._r.append(instr_el)
+    run._r.append(end)
+
+
+def _configurar_seccion(doc: Document):
+    """Header con logo UPS + footer con 'Carrera de Computación' y numeración X/Y."""
+    section = doc.sections[0]
+
+    # Encabezado: logo centrado
+    header = section.header
+    hp = header.paragraphs[0]
+    hp.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    if LOGO.exists():
+        hp.add_run().add_picture(str(LOGO), width=Inches(1.4))
+
+    # Pie de página: nombre de la carrera + número de página "X / Y"
+    footer = section.footer
+    fp = footer.paragraphs[0]
+    fp.text = "Carrera de Computación"
+    fp.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    pp = footer.add_paragraph()
+    pp.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    _add_campo(pp, "PAGE")
+    pp.add_run(" / ")
+    _add_campo(pp, "NUMPAGES")
+
+
 def _encabezado_institucional(doc: Document, tipo: int, nombre: str):
     """Bloque de encabezado UPS común a todos los informes."""
+    _configurar_seccion(doc)  # logo en header + footer con numeración en todas las hojas
+
     t = doc.add_heading("UNIVERSIDAD POLITÉCNICA SALESIANA — SEDE CUENCA", level=1)
     t.alignment = WD_ALIGN_PARAGRAPH.CENTER
     t.runs[0].font.color.rgb = UPS_BLUE
