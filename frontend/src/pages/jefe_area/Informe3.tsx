@@ -51,6 +51,20 @@ export default function Informe3() {
     }
   }
 
+  const enviarReporteMejoras = async () => {
+    if (!consejoId) return
+    setNotificando(true); setMsgNotif('')
+    try {
+      const { data } = await api.post('/flujo/reporte-mejoras-estudiantes', { consejo_id: Number(consejoId) })
+      setMsgNotif(data.message ?? 'Reporte de mejoras enviado.')
+    } catch (e: unknown) {
+      const m = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      setMsgNotif(m ?? 'No se pudo enviar el reporte de mejoras.')
+    } finally {
+      setNotificando(false)
+    }
+  }
+
   useEffect(() => {
     Promise.all([
       api.get<ApiResponse<Consejo[]>>('/consejos/'),
@@ -138,10 +152,16 @@ export default function Informe3() {
           ))}
         </select>
         {consejoId && (
-          <button onClick={notificarEstudiantes} disabled={notificando}
-            className="bg-ups-red text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700 transition disabled:opacity-60">
-            {notificando ? 'Notificando...' : '✉ Notificar a estudiantes'}
-          </button>
+          <>
+            <button onClick={notificarEstudiantes} disabled={notificando}
+              className="bg-ups-red text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700 transition disabled:opacity-60">
+              {notificando ? 'Enviando...' : '✉ Notificar a estudiantes'}
+            </button>
+            <button onClick={enviarReporteMejoras} disabled={notificando}
+              className="bg-ups-blue text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-800 transition disabled:opacity-60">
+              {notificando ? 'Enviando...' : '📄 Enviar reporte de mejoras'}
+            </button>
+          </>
         )}
       </div>
 

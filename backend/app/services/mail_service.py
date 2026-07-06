@@ -136,6 +136,40 @@ def enviar_email_estudiantes(
             logger.warning(f"No se pudo enviar email a estudiante {dest}: {e}")
 
 
+def enviar_reporte_mejoras_estudiantes(
+    destinatarios: list[str],
+    consejo_id: int,
+    area_nombre: str,
+    bloques_html: str,
+) -> None:
+    """
+    Email a estudiantes con el REPORTE FINAL de mejoras del área,
+    derivado del Informe 3 (análisis de calificaciones + acciones de mejora).
+    """
+    asunto = f"[UPS Computación] Reporte de mejoras — {area_nombre}"
+    cuerpo = f"""
+    <html><body style="font-family: Arial, sans-serif; color: #333; line-height:1.5;">
+    <p>Estimado/a estudiante,</p>
+    <p>Como parte del proceso de seguimiento académico de la Carrera de Computación,
+    compartimos contigo el <strong>reporte de mejoras</strong> del área
+    <strong>{area_nombre}</strong>, con las acciones que se implementarán para
+    fortalecer tu proceso de aprendizaje.</p>
+    <hr>
+    {bloques_html}
+    <hr>
+    <p>Agradecemos tu compromiso. Si tienes observaciones adicionales, puedes
+    acercarte a tu Jefe de Área.</p>
+    <br>
+    <p>Carrera de Computación — UPS Cuenca</p>
+    </body></html>
+    """
+    for dest in destinatarios:
+        try:
+            enviar_email(dest, asunto, cuerpo)
+        except Exception as e:
+            logger.warning(f"No se pudo enviar reporte a estudiante {dest}: {e}")
+
+
 def enviar_docx_jefe(
     destinatario: str,
     nombre_jefe: str,

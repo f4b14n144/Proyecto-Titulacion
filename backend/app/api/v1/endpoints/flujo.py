@@ -17,7 +17,9 @@ from app.models.asignatura import Asignatura
 from app.models.jefatura import JefaturaArea
 from app.core.scheduler import programar_flujo_consejo
 from app.services.flujo_consejo import ejecutar_flujo
-from app.services.mail_service import enviar_email_estudiantes
+from app.models.informe import Informe
+from app.models.area import Area
+from app.services.mail_service import enviar_email_estudiantes, enviar_reporte_mejoras_estudiantes
 from datetime import datetime, timezone
 
 router = APIRouter()
@@ -216,5 +218,103 @@ def notificar_estudiantes(
     return {
         "data": {"total": len(notificados), "notificaciones": notificados},
         "message": f"Se notificó a estudiantes de {len(notificados)} materia(s)-grupo para reportar al Jefe de Área",
+        "success": True,
+    }
+
+
+def _areas_del_usuario(db: Session, current_user: Usuario, consejo: ConsejoCarrera, area_id: Optional[int]) -> list[int]:
+    if current_user.rol.nombre == "JEFE_AREA":
+        areas = [a for (a,) in db.query(JefaturaArea.area_id).filter(
+            JefaturaArea.usuario_id == current_user.id,
+            JefaturaArea.periodo_id == consejo.periodo_id,
+        ).all()]
+        if not areas:
+            raise HTTPException(status_code=400, detail="No tienes jefatura en el período de este consejo")
+        return areas
+    return [area_id] if area_id else [a for (a,) in db.query(Asignatura.area_id).distinct().all()]
+
+
+def _destinos_por_grupo(db: Session, areas: list[int], periodo_id: int) -> list[str]:
+    rows = (
+        db.query(AsignacionDocente, Asignatura)
+        .join(Asignatura, AsignacionDocente.asignatura_id == Asignatura.id)
+        .filter(AsignacionDocente.periodo_id == periodo_id, Asignatura.area_id.in_(areas))
+        .all()
+    )
+    vistos, destinos = set(), []
+    for asig, asignatura in rows:
+        clave = (asignatura.id, asig.grupo)
+        if clave in vistos:
+            continue
+        vistos.add(clave)
+        destinos.append(f"estudiantes.{asignatura.codigo.lower().replace('-', '')}.{asig.grupo.lower()}@est.ups.edu.ec")
+    return destinos
+
+
+@router.post("/reporte-mejoras-estudiantes", response_model=dict)
+def reporte_mejoras_estudiantes(
+    payload: NotificarEstudiantesIn,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(_director_o_jefe),
+):
+    """
+    Envía a los estudiantes del área un REPORTE FINAL con las acciones de mejora,
+    tomado del Informe 3 (análisis de calificaciones interciclo) ya generado.
+    """
+    consejo = db.query(ConsejoCarrera).filter(ConsejoCarrera.id == payload.consejo_id).first()
+    if not consejo:
+        raise HTTPException(status_code=404, detail="Consejo no encontrado")
+
+    areas = _areas_del_usuario(db, current_user, consejo, payload.area_id)
+    area_id = areas[0]
+    area = db.query(Area).filter(Area.id == area_id).first()
+
+    # Tomar el Informe 3 del área (debe estar generado)
+    informe = db.query(Informe).filter(
+        Informe.consejo_id == consejo.id,
+        Informe.area_id == area_id,
+        Informe.tipo_informe == 3,
+    ).first()
+    if not informe or not informe.contenido_json:
+        raise HTTPException(
+            status_code=400,
+            detail="Primero genera el Informe 3 del área (Visitas + Interciclo) para tener el reporte de mejoras",
+        )
+
+    cals = informe.contenido_json.get("calificaciones_interciclo", [])
+    if not cals:
+        raise HTTPException(status_code=400, detail="El Informe 3 no tiene análisis de calificaciones para reportar")
+
+    # Componer los bloques del reporte (por asignatura: resultado + acciones de mejora)
+    bloques = []
+    for c in cals:
+        bloques.append(
+            f"<h3 style='color:#003DA5;margin-bottom:2px'>{c.get('asignatura','')} — Grupo {c.get('grupo','')}</h3>"
+            f"<p style='margin:2px 0'><strong>Resultado:</strong> {c.get('conclusion','')}</p>"
+            f"<p style='margin:2px 0'><strong>Acciones de mejora:</strong><br>{str(c.get('acciones_mejora','')).replace(chr(10), '<br>')}</p>"
+        )
+    bloques_html = "".join(bloques)
+
+    destinos = _destinos_por_grupo(db, areas, consejo.periodo_id)
+
+    # Registrar notificaciones y enviar (simulado si no hay SMTP)
+    for destino in destinos:
+        db.add(Notificacion(
+            informe_id=informe.id,
+            consejo_id=consejo.id,
+            destinatario_email=destino,
+            tipo="ESTUDIANTE_REPORTE",
+            reply_to_token=str(uuid.uuid4()),
+        ))
+    db.commit()
+
+    try:
+        enviar_reporte_mejoras_estudiantes(destinos, consejo.id, area.nombre if area else "", bloques_html)
+    except Exception:
+        pass
+
+    return {
+        "data": {"total": len(destinos), "asignaturas_en_reporte": len(cals)},
+        "message": f"Reporte de mejoras enviado a estudiantes de {len(destinos)} grupo(s) del área {area.nombre if area else ''}",
         "success": True,
     }
