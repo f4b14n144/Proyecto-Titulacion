@@ -9,7 +9,7 @@ from app.schemas.periodo import PeriodoCreate, PeriodoUpdate, PeriodoOut
 router = APIRouter()
 
 _solo_director = require_role("DIRECTOR_CARRERA")
-_director_o_jefe = require_role("DIRECTOR_CARRERA", "JEFE_AREA")  # lectura compartida
+_director_o_jefe = require_role("DIRECTOR_CARRERA", "JEFE_AREA", "DOCENTE")  # lectura compartida
 
 
 @router.get("/", response_model=dict)

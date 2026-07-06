@@ -96,6 +96,7 @@ export default function App() {
             <AppLayout>
               <Routes>
                 <Route index element={<DocenteDashboard />} />
+                <Route path="calificaciones" element={<SubirCalificaciones />} />
               </Routes>
             </AppLayout>
           </ProtectedRoute>

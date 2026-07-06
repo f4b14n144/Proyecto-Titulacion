@@ -22,19 +22,26 @@ from app.services.excel_processor import procesar_excel
 router = APIRouter()
 
 _solo_director = require_role("DIRECTOR_CARRERA")
+_director_o_docente = require_role("DIRECTOR_CARRERA", "DOCENTE")
 
 TIPOS_VALIDOS = {"INTERCICLO", "FINAL"}
 MAX_BYTES = 10 * 1024 * 1024  # 10 MB
 
 
-def _cargar_asignaciones(db: Session, periodo_id: int) -> list[dict]:
-    """Devuelve las asignaciones del período con info de asignatura."""
-    rows = (
+def _cargar_asignaciones(db: Session, periodo_id: int, usuario_id: int | None = None) -> list[dict]:
+    """
+    Devuelve las asignaciones del período con info de asignatura.
+    Si usuario_id se especifica (docente), solo devuelve SUS asignaciones,
+    de modo que un docente solo pueda subir calificaciones de sus materias.
+    """
+    q = (
         db.query(AsignacionDocente, Asignatura)
         .join(Asignatura, AsignacionDocente.asignatura_id == Asignatura.id)
         .filter(AsignacionDocente.periodo_id == periodo_id)
-        .all()
     )
+    if usuario_id is not None:
+        q = q.filter(AsignacionDocente.usuario_id == usuario_id)
+    rows = q.all()
     return [
         {
             "asignatura_id":     asig.asignatura_id,
@@ -53,9 +60,11 @@ async def preview_calificaciones(
     tipo: str = Form(...),
     consejo_id: int = Form(...),
     db: Session = Depends(get_db),
-    _: Usuario = Depends(_solo_director),
+    current_user: Usuario = Depends(_director_o_docente),
 ):
-    """Procesa el Excel y devuelve un preview sin guardar en DB."""
+    """Procesa el Excel y devuelve un preview sin guardar en DB.
+    Un docente solo ve/sube sus propias asignaturas; el director, todas."""
+    solo_mis_asignaturas = current_user.id if current_user.rol.nombre == "DOCENTE" else None
     if tipo.upper() not in TIPOS_VALIDOS:
         raise HTTPException(status_code=400, detail=f"tipo debe ser INTERCICLO o FINAL, recibido: {tipo}")
 
@@ -79,12 +88,12 @@ async def preview_calificaciones(
         ruta_tmp = tmp.name
 
     try:
-        asignaciones = _cargar_asignaciones(db, consejo.periodo_id)
+        asignaciones = _cargar_asignaciones(db, consejo.periodo_id, solo_mis_asignaturas)
         if not asignaciones:
-            raise HTTPException(
-                status_code=400,
-                detail="No hay asignaciones docente registradas para el período de este consejo",
-            )
+            detalle = ("No tienes asignaturas registradas en el período de este consejo"
+                       if solo_mis_asignaturas
+                       else "No hay asignaciones docente registradas para el período de este consejo")
+            raise HTTPException(status_code=400, detail=detalle)
 
         resultados = procesar_excel(ruta_tmp, tipo.upper(), asignaciones)
     except ValueError as e:
@@ -119,9 +128,11 @@ async def confirmar_calificaciones(
     tipo: str = Form(...),
     consejo_id: int = Form(...),
     db: Session = Depends(get_db),
-    _: Usuario = Depends(_solo_director),
+    current_user: Usuario = Depends(_director_o_docente),
 ):
-    """Procesa el Excel y guarda las calificaciones en DB (sobreescribe si ya existen)."""
+    """Procesa el Excel y guarda las calificaciones en DB (sobreescribe si ya existen).
+    Un docente solo puede guardar calificaciones de sus propias asignaturas."""
+    solo_mis_asignaturas = current_user.id if current_user.rol.nombre == "DOCENTE" else None
     if tipo.upper() not in TIPOS_VALIDOS:
         raise HTTPException(status_code=400, detail=f"tipo debe ser INTERCICLO o FINAL, recibido: {tipo}")
 
@@ -142,9 +153,12 @@ async def confirmar_calificaciones(
         ruta_tmp = tmp.name
 
     try:
-        asignaciones = _cargar_asignaciones(db, consejo.periodo_id)
+        asignaciones = _cargar_asignaciones(db, consejo.periodo_id, solo_mis_asignaturas)
         if not asignaciones:
-            raise HTTPException(status_code=400, detail="No hay asignaciones registradas para este período")
+            detalle = ("No tienes asignaturas registradas en este período"
+                       if solo_mis_asignaturas
+                       else "No hay asignaciones registradas para este período")
+            raise HTTPException(status_code=400, detail=detalle)
 
         resultados = procesar_excel(ruta_tmp, tipo.upper(), asignaciones)
     except ValueError as e:
