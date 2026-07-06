@@ -330,10 +330,19 @@ def generar_informe_4(db: Session, consejo_id: int, area_id: int) -> Informe:
         nombre_asig = asig.nombre if asig else f"#{asig_doc.asignatura_id}"
         grupo = cal.datos_json.get("grupo", asig_doc.grupo)
 
+        # Observación del docente sobre la materia (de cualquier co-dictante del grupo)
+        from app.models.observacion_docente import ObservacionDocente
+        obs = db.query(ObservacionDocente).filter(
+            ObservacionDocente.consejo_id == consejo_id,
+            ObservacionDocente.asignatura_id == asig_doc.asignatura_id,
+            ObservacionDocente.grupo == asig_doc.grupo,
+        ).first()
+
         calificaciones_data.append({
             "asignatura": nombre_asig,
             "grupo": grupo,
             "docente": _nombre_usuario(db, asig_doc.usuario_id),
+            "observaciones_materia": obs.contenido if obs else "",
             **analisis,
         })
 

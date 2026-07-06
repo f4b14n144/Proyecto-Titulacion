@@ -25,6 +25,7 @@ const jefeLinks = [
 const docenteLinks = [
   { to: '/docente', label: 'Dashboard', exact: true },
   { to: '/docente/calificaciones', label: 'Subir mis notas' },
+  { to: '/docente/observaciones', label: 'Observaciones' },
 ]
 
 const linkClass = ({ isActive }: { isActive: boolean }) =>

@@ -290,6 +290,9 @@ def crear_informe_4():
 
     doc.add_heading("Acciones de mejora sugeridas", level=3)
     doc.add_paragraph("{{ c.acciones_mejora }}")
+
+    doc.add_heading("Observaciones de la materia (docente)", level=3)
+    doc.add_paragraph("{{ c.observaciones_materia }}")
     doc.add_paragraph()
     doc.add_paragraph("{% endfor %}")
 
