@@ -53,6 +53,8 @@ export default function SubirCalificaciones() {
     ]).then(([pRes, cRes]) => {
       setPeriodos(pRes.data.data)
       setConsejos(cRes.data.data)
+      // Auto-seleccionar el último consejo (el más reciente viene primero)
+      if (cRes.data.data.length > 0) setConsejoId(String(cRes.data.data[0].id))
     }).catch(() => setError('Error al cargar datos iniciales.'))
   }, [])
 

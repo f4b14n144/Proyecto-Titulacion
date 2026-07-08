@@ -77,6 +77,12 @@ export default function Informe3() {
     })
   }, [])
 
+  // Auto-seleccionar el último consejo (el más reciente viene primero)
+  useEffect(() => {
+    if (consejos.length > 0 && !consejoId) seleccionar(String(consejos[0].id))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [consejos])
+
   const seleccionar = async (cId: string) => {
     setConsejoId(cId); setInforme(null); setVisitas({}); setMsg('')
     if (!cId) return

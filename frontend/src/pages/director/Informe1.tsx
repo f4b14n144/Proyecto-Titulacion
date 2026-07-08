@@ -32,7 +32,12 @@ export default function Informe1() {
     Promise.all([
       api.get<ApiResponse<Periodo[]>>('/periodos/'),
       api.get<ApiResponse<Consejo[]>>('/consejos/'),
-    ]).then(([p, c]) => { setPeriodos(p.data.data); setConsejos(c.data.data) })
+    ]).then(([p, c]) => {
+      setPeriodos(p.data.data)
+      setConsejos(c.data.data)
+      // Auto-seleccionar el último consejo (el más reciente viene primero)
+      if (c.data.data.length > 0) seleccionarConsejo(String(c.data.data[0].id))
+    })
   }, [])
 
   const pintarInforme = (inf1: Informe) => {
