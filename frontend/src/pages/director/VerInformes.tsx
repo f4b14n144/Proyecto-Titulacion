@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import api from '../../services/api'
 import { descargarInforme } from '../../services/informes.service'
 import { formatEstado } from '../../utils/formatters'
+import PreviewInforme from '../../components/PreviewInforme'
+import { Eye, Download, X } from 'lucide-react'
 import type { Area, ApiResponse } from '../../types'
 
 interface Informe {
@@ -10,6 +12,7 @@ interface Informe {
   area_id: number
   tipo_informe: number
   estado: string
+  contenido_json?: Record<string, unknown> | null
   ruta_docx: string | null
   version: number
 }
@@ -37,6 +40,8 @@ export default function VerInformes() {
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState('')
   const [descargando, setDescargando] = useState<number | null>(null)
+  const [preview, setPreview] = useState<Informe | null>(null)
+  const [cargandoPreview, setCargandoPreview] = useState(false)
 
   const cargar = async () => {
     setCargando(true)
@@ -76,6 +81,19 @@ export default function VerInformes() {
       setError('No se pudo descargar el documento.')
     } finally {
       setDescargando(null)
+    }
+  }
+
+  const verPreview = async (inf: Informe) => {
+    setCargandoPreview(true)
+    setError('')
+    try {
+      const { data } = await api.get<ApiResponse<Informe>>(`/informes/${inf.id}`)
+      setPreview(data.data)
+    } catch {
+      setError('No se pudo cargar la vista previa.')
+    } finally {
+      setCargandoPreview(false)
     }
   }
 
@@ -126,22 +144,70 @@ export default function VerInformes() {
                   </td>
                   <td className="px-4 py-3 text-gray-400 text-xs">v{inf.version}</td>
                   <td className="px-4 py-3 text-right">
-                    {inf.ruta_docx ? (
+                    <div className="flex items-center justify-end gap-3">
                       <button
-                        onClick={() => descargar(inf)}
-                        disabled={descargando === inf.id}
-                        className="text-green-600 hover:underline text-xs disabled:opacity-50"
+                        onClick={() => verPreview(inf)}
+                        className="flex items-center gap-1 text-ups-blue hover:underline text-xs"
                       >
-                        {descargando === inf.id ? 'Descargando...' : 'Descargar .docx'}
+                        <Eye size={14} /> Ver
                       </button>
-                    ) : (
-                      <span className="text-gray-300 text-xs">Sin documento</span>
-                    )}
+                      {inf.ruta_docx ? (
+                        <button
+                          onClick={() => descargar(inf)}
+                          disabled={descargando === inf.id}
+                          className="flex items-center gap-1 text-green-600 hover:underline text-xs disabled:opacity-50"
+                        >
+                          <Download size={14} /> {descargando === inf.id ? 'Descargando...' : '.docx'}
+                        </button>
+                      ) : (
+                        <span className="text-gray-300 text-xs">Sin documento</span>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Modal de vista previa */}
+      {(preview || cargandoPreview) && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between px-5 py-3 border-b">
+              <div>
+                <h2 className="font-bold text-gray-800">
+                  {preview ? (TIPO_LABEL[preview.tipo_informe] ?? 'Informe') : 'Cargando...'}
+                </h2>
+                {preview && (
+                  <p className="text-xs text-gray-500">
+                    {nombreArea(preview.area_id)} · {periodoDeConsejo(preview.consejo_id)} · v{preview.version}
+                  </p>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                {preview?.ruta_docx && (
+                  <button onClick={() => descargar(preview)}
+                    className="flex items-center gap-1 bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-green-700">
+                    <Download size={14} /> Descargar
+                  </button>
+                )}
+                <button onClick={() => setPreview(null)} className="text-gray-400 hover:text-gray-700">
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+            <div className="overflow-y-auto p-5">
+              {cargandoPreview ? (
+                <div className="flex justify-center py-10">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-ups-blue" />
+                </div>
+              ) : preview ? (
+                <PreviewInforme tipo={preview.tipo_informe} contenido={preview.contenido_json ?? {}} />
+              ) : null}
+            </div>
+          </div>
         </div>
       )}
     </div>
