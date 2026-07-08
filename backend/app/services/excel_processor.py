@@ -246,15 +246,29 @@ def _extraer_estudiantes(
             continue
 
         # Determinar estado
-        estado_raw = str(row.get(col_map["estado"]) if col_map["estado"] else "").strip().upper()
-        if estado_raw in ("APROBADO", "REPROBADO", "APROBADA", "REPROBADA"):
-            estado = "APROBADO" if "APROBAD" in estado_raw else "REPROBADO"
-        elif nf is not None:
-            estado = "APROBADO" if nf >= 14.0 else "REPROBADO"
-        elif p1 is not None and tipo == "INTERCICLO":
-            estado = "APROBADO" if p1 >= 25.0 else "BAJO"  # sobre 50
-        else:
-            estado = "DESCONOCIDO"
+        if tipo == "INTERCICLO":
+            # El período NO ha terminado (solo primer parcial /50): no aplica
+            # APROBADO/REPROBADO. Se clasifica por rango de desempeño del parcial.
+            # (la columna ESTADO del Excel dice REPROBADO para todos porque la
+            #  materia sigue en curso — no debe usarse aquí)
+            if p1 is None:
+                estado = "SIN NOTA"
+            elif p1 >= 40:
+                estado = "ALTO"
+            elif p1 >= 30:
+                estado = "MEDIO"
+            else:
+                estado = "BAJO"
+        else:  # FINAL: usar el veredicto oficial de la columna ESTADO
+            estado_raw = str(row.get(col_map["estado"]) if col_map["estado"] else "").strip().upper()
+            if "APROBAD" in estado_raw:
+                estado = "APROBADO"
+            elif "REPROBAD" in estado_raw:
+                estado = "REPROBADO"
+            elif nf is not None:
+                estado = "APROBADO" if nf >= 70.0 else "REPROBADO"  # nota final /100
+            else:
+                estado = "DESCONOCIDO"
 
         est: dict[str, Any] = {
             "parcial1":     p1,

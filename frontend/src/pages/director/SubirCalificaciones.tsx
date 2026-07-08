@@ -113,8 +113,9 @@ export default function SubirCalificaciones() {
   }
 
   const estadoColor = (e: string) => {
-    if (e === 'APROBADO') return 'text-green-600'
-    if (e === 'REPROBADO') return 'text-red-600'
+    if (e === 'APROBADO' || e === 'ALTO') return 'text-green-600'
+    if (e === 'REPROBADO' || e === 'BAJO') return 'text-red-600'
+    if (e === 'MEDIO') return 'text-yellow-600'
     return 'text-gray-500'
   }
 
@@ -256,7 +257,7 @@ export default function SubirCalificaciones() {
                           <>
                             <th className="text-left px-3 py-2 text-gray-500">#</th>
                             <th className="text-right px-3 py-2 text-gray-500">Parcial 1 /50</th>
-                            <th className="text-left px-3 py-2 text-gray-500">Estado</th>
+                            <th className="text-left px-3 py-2 text-gray-500">Rango</th>
                           </>
                         ) : (
                           <>
