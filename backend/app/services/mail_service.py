@@ -11,11 +11,22 @@ import uuid
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
+from email.mime.image import MIMEImage
 from email import encoders
 from pathlib import Path
 from loguru import logger
 from sqlalchemy.orm import Session
 from app.core.config import settings
+
+# Logo institucional que se incrusta en el encabezado de los correos
+_LOGO_PATH = Path(__file__).parent.parent / "static" / "logo-ups.jpg"
+
+# Cabecera HTML con el logo (referencia la imagen inline por Content-ID)
+_ENCABEZADO_LOGO = (
+    '<div style="text-align:center;margin-bottom:12px">'
+    '<img src="cid:logo_ups" alt="UPS" style="max-height:70px">'
+    '</div>'
+)
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -54,14 +65,26 @@ def enviar_email(
         logger.warning(f"SMTP no configurado — email a {destinatario} omitido (modo dev)")
         return
 
-    msg = MIMEMultipart("alternative")
+    # multipart/related permite incrustar el logo inline junto al HTML
+    msg = MIMEMultipart("related")
     msg["Subject"] = asunto
     msg["From"] = settings.EMAIL_FROM
     msg["To"] = destinatario
     if reply_to:
         msg["Reply-To"] = reply_to
 
+    # Anteponer el encabezado con el logo si la imagen existe
+    if _LOGO_PATH.exists():
+        cuerpo_html = _ENCABEZADO_LOGO + cuerpo_html
     msg.attach(MIMEText(cuerpo_html, "html", "utf-8"))
+
+    # Adjuntar el logo como imagen inline (Content-ID: logo_ups)
+    if _LOGO_PATH.exists():
+        with open(_LOGO_PATH, "rb") as f:
+            img = MIMEImage(f.read())
+        img.add_header("Content-ID", "<logo_ups>")
+        img.add_header("Content-Disposition", "inline", filename="logo-ups.jpg")
+        msg.attach(img)
 
     if adjunto_ruta and Path(adjunto_ruta).exists():
         with open(adjunto_ruta, "rb") as f:
