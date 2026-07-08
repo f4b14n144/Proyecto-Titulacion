@@ -56,7 +56,7 @@ def listar_asignaciones(
         q = q.filter(AsignacionDocente.periodo_id == periodo_id)
 
     # Si es JEFE_AREA, solo puede ver asignaciones de SU(S) área(s) — se impone en backend
-    if current_user.rol.nombre == "JEFE_AREA":
+    if getattr(current_user, "rol_efectivo", current_user.rol.nombre) == "JEFE_AREA":
         jq = db.query(JefaturaArea.area_id).filter(JefaturaArea.usuario_id == current_user.id)
         if periodo_id:
             jq = jq.filter(JefaturaArea.periodo_id == periodo_id)

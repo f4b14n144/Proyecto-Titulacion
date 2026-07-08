@@ -163,7 +163,7 @@ def notificar_estudiantes(
         raise HTTPException(status_code=404, detail="Consejo no encontrado")
 
     # Determinar áreas a notificar
-    if current_user.rol.nombre == "JEFE_AREA":
+    if getattr(current_user, "rol_efectivo", current_user.rol.nombre) == "JEFE_AREA":
         areas = [a_id for (a_id,) in db.query(JefaturaArea.area_id).filter(
             JefaturaArea.usuario_id == current_user.id,
             JefaturaArea.periodo_id == consejo.periodo_id,
@@ -223,7 +223,7 @@ def notificar_estudiantes(
 
 
 def _areas_del_usuario(db: Session, current_user: Usuario, consejo: ConsejoCarrera, area_id: Optional[int]) -> list[int]:
-    if current_user.rol.nombre == "JEFE_AREA":
+    if getattr(current_user, "rol_efectivo", current_user.rol.nombre) == "JEFE_AREA":
         areas = [a for (a,) in db.query(JefaturaArea.area_id).filter(
             JefaturaArea.usuario_id == current_user.id,
             JefaturaArea.periodo_id == consejo.periodo_id,

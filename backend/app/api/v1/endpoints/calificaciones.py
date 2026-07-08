@@ -64,7 +64,7 @@ def _cargar_asignaciones(
 def _alcance_por_rol(db: Session, current_user: Usuario, periodo_id: int) -> tuple[int | None, list[int] | None]:
     """Devuelve (usuario_id, areas) para filtrar según el rol:
     docente → sus materias; jefe → sus áreas; director → todo."""
-    rol = current_user.rol.nombre
+    rol = getattr(current_user, "rol_efectivo", current_user.rol.nombre)
     if rol == "DOCENTE":
         return current_user.id, None
     if rol == "JEFE_AREA":

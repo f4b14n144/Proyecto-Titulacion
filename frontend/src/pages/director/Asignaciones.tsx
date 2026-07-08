@@ -80,7 +80,8 @@ export default function Asignaciones() {
   }
 
   const asignarJefatura = async () => {
-    if (!fJef.usuario_id || !fJef.area_id || !fJef.periodo_id) {
+    const periodoEfectivo = fJef.periodo_id || filtroPeriodo
+    if (!fJef.usuario_id || !fJef.area_id || !periodoEfectivo) {
       setErrJef('Todos los campos son obligatorios.')
       return
     }
@@ -90,7 +91,7 @@ export default function Asignaciones() {
       await api.post('/jefaturas/', {
         usuario_id: Number(fJef.usuario_id),
         area_id: Number(fJef.area_id),
-        periodo_id: Number(fJef.periodo_id),
+        periodo_id: Number(periodoEfectivo),
       })
       setFJef({ usuario_id: '', area_id: '', periodo_id: filtroPeriodo })
       await cargarAsignaciones()
@@ -109,7 +110,8 @@ export default function Asignaciones() {
   }
 
   const crearAsignacion = async () => {
-    if (!fAsig.usuario_id || !fAsig.asignatura_id || !fAsig.periodo_id || !fAsig.grupo.trim()) {
+    const periodoEfectivo = fAsig.periodo_id || filtroPeriodo
+    if (!fAsig.usuario_id || !fAsig.asignatura_id || !periodoEfectivo || !fAsig.grupo.trim()) {
       setErrAsig('Todos los campos son obligatorios.')
       return
     }
@@ -119,7 +121,7 @@ export default function Asignaciones() {
       await api.post('/asignaciones/', {
         usuario_id: Number(fAsig.usuario_id),
         asignatura_id: Number(fAsig.asignatura_id),
-        periodo_id: Number(fAsig.periodo_id),
+        periodo_id: Number(periodoEfectivo),
         grupo: fAsig.grupo.trim(),
       })
       setFAsig({ usuario_id: '', asignatura_id: '', periodo_id: filtroPeriodo, grupo: '' })

@@ -59,7 +59,7 @@ def me(current_user: Usuario = Depends(get_current_user)):
         id=current_user.id,
         nombre_completo=current_user.nombre_completo,
         email_institucional=current_user.email_institucional,
-        rol=current_user.rol.nombre,
+        rol=getattr(current_user, "rol_efectivo", current_user.rol.nombre),
         activo=current_user.activo,
     )
 

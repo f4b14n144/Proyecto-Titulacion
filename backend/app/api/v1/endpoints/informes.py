@@ -23,7 +23,7 @@ def _validar_area_jefe(db: Session, usuario: Usuario, area_id: int, tipo_informe
     Un jefe solo puede generar informes por área (2,3,4) de SU área.
     El Informe 1 (Centro Docente) lo pueden generar director o jefe sin restricción de área.
     """
-    if usuario.rol.nombre != "JEFE_AREA":
+    if getattr(usuario, "rol_efectivo", usuario.rol.nombre) != "JEFE_AREA":
         return
     if tipo_informe == 1:
         return
@@ -66,7 +66,7 @@ def listar_informes(
         q = q.filter(Informe.area_id == area_id)
 
     # Si es JEFE_AREA, solo ve los informes de SU(S) área(s) + el Informe 1 (compartido)
-    if current_user.rol.nombre == "JEFE_AREA":
+    if getattr(current_user, "rol_efectivo", current_user.rol.nombre) == "JEFE_AREA":
         from sqlalchemy import or_
         from app.models.jefatura import JefaturaArea
         areas_jefe = [a_id for (a_id,) in
