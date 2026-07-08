@@ -1,11 +1,20 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from app.core.deps import get_db, get_current_user
-from app.core.security import verify_password, create_access_token, create_refresh_token, verify_token
+from app.core.security import (
+    verify_password, hash_password,
+    create_access_token, create_refresh_token, verify_token,
+)
 from app.models.usuario import Usuario
 from app.schemas.auth import LoginRequest, TokenResponse, RefreshRequest, MeResponse
 
 router = APIRouter()
+
+
+class CambiarPasswordIn(BaseModel):
+    password_actual: str
+    password_nueva: str
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -53,3 +62,22 @@ def me(current_user: Usuario = Depends(get_current_user)):
         rol=current_user.rol.nombre,
         activo=current_user.activo,
     )
+
+
+@router.post("/cambiar-password", response_model=dict)
+def cambiar_password(
+    payload: CambiarPasswordIn,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Permite a cualquier usuario autenticado cambiar su propia contraseña."""
+    if not verify_password(payload.password_actual, current_user.hashed_password):
+        raise HTTPException(status_code=400, detail="La contraseña actual es incorrecta")
+    if len(payload.password_nueva) < 6:
+        raise HTTPException(status_code=400, detail="La nueva contraseña debe tener al menos 6 caracteres")
+    if payload.password_nueva == payload.password_actual:
+        raise HTTPException(status_code=400, detail="La nueva contraseña debe ser diferente a la actual")
+
+    current_user.hashed_password = hash_password(payload.password_nueva)
+    db.commit()
+    return {"data": None, "message": "Contraseña actualizada correctamente", "success": True}
