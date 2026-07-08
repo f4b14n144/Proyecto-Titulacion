@@ -79,6 +79,7 @@ export default function App() {
             <AppLayout>
               <Routes>
                 <Route index element={<JefeDashboard />} />
+                <Route path="calificaciones" element={<SubirCalificaciones />} />
                 <Route path="informe1" element={<Informe1 />} />
                 <Route path="informe2" element={<Informe2 />} />
                 <Route path="informe3" element={<Informe3 />} />

@@ -22,17 +22,22 @@ from app.services.excel_processor import procesar_excel
 router = APIRouter()
 
 _solo_director = require_role("DIRECTOR_CARRERA")
-_director_o_docente = require_role("DIRECTOR_CARRERA", "DOCENTE")
+# Director, jefe de área y docente pueden subir calificaciones (con distinto alcance)
+_puede_subir = require_role("DIRECTOR_CARRERA", "JEFE_AREA", "DOCENTE")
 
 TIPOS_VALIDOS = {"INTERCICLO", "FINAL"}
 MAX_BYTES = 10 * 1024 * 1024  # 10 MB
 
 
-def _cargar_asignaciones(db: Session, periodo_id: int, usuario_id: int | None = None) -> list[dict]:
+def _cargar_asignaciones(
+    db: Session, periodo_id: int,
+    usuario_id: int | None = None, areas: list[int] | None = None,
+) -> list[dict]:
     """
     Devuelve las asignaciones del período con info de asignatura.
-    Si usuario_id se especifica (docente), solo devuelve SUS asignaciones,
-    de modo que un docente solo pueda subir calificaciones de sus materias.
+    - usuario_id (docente): solo SUS asignaciones.
+    - areas (jefe): solo las asignaturas de su(s) área(s).
+    - ninguno (director): todas.
     """
     q = (
         db.query(AsignacionDocente, Asignatura)
@@ -41,6 +46,8 @@ def _cargar_asignaciones(db: Session, periodo_id: int, usuario_id: int | None = 
     )
     if usuario_id is not None:
         q = q.filter(AsignacionDocente.usuario_id == usuario_id)
+    if areas is not None:
+        q = q.filter(Asignatura.area_id.in_(areas))
     rows = q.all()
     return [
         {
@@ -54,17 +61,32 @@ def _cargar_asignaciones(db: Session, periodo_id: int, usuario_id: int | None = 
     ]
 
 
+def _alcance_por_rol(db: Session, current_user: Usuario, periodo_id: int) -> tuple[int | None, list[int] | None]:
+    """Devuelve (usuario_id, areas) para filtrar según el rol:
+    docente → sus materias; jefe → sus áreas; director → todo."""
+    rol = current_user.rol.nombre
+    if rol == "DOCENTE":
+        return current_user.id, None
+    if rol == "JEFE_AREA":
+        from app.models.jefatura import JefaturaArea
+        areas = [a for (a,) in db.query(JefaturaArea.area_id).filter(
+            JefaturaArea.usuario_id == current_user.id,
+            JefaturaArea.periodo_id == periodo_id,
+        ).all()]
+        return None, (areas or [-1])
+    return None, None  # director
+
+
 @router.post("/preview", response_model=dict)
 async def preview_calificaciones(
     archivo: UploadFile = File(...),
     tipo: str = Form(...),
     consejo_id: int = Form(...),
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(_director_o_docente),
+    current_user: Usuario = Depends(_puede_subir),
 ):
     """Procesa el Excel y devuelve un preview sin guardar en DB.
-    Un docente solo ve/sube sus propias asignaturas; el director, todas."""
-    solo_mis_asignaturas = current_user.id if current_user.rol.nombre == "DOCENTE" else None
+    Docente: solo sus materias; jefe: su área; director: todas."""
     if tipo.upper() not in TIPOS_VALIDOS:
         raise HTTPException(status_code=400, detail=f"tipo debe ser INTERCICLO o FINAL, recibido: {tipo}")
 
@@ -88,11 +110,12 @@ async def preview_calificaciones(
         ruta_tmp = tmp.name
 
     try:
-        asignaciones = _cargar_asignaciones(db, consejo.periodo_id, solo_mis_asignaturas)
+        uid, areas = _alcance_por_rol(db, current_user, consejo.periodo_id)
+        asignaciones = _cargar_asignaciones(db, consejo.periodo_id, uid, areas)
         if not asignaciones:
             detalle = ("No tienes asignaturas registradas en el período de este consejo"
-                       if solo_mis_asignaturas
-                       else "No hay asignaciones docente registradas para el período de este consejo")
+                       if (uid or areas) else
+                       "No hay asignaciones docente registradas para el período de este consejo")
             raise HTTPException(status_code=400, detail=detalle)
 
         resultados = procesar_excel(ruta_tmp, tipo.upper(), asignaciones)
@@ -128,11 +151,10 @@ async def confirmar_calificaciones(
     tipo: str = Form(...),
     consejo_id: int = Form(...),
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(_director_o_docente),
+    current_user: Usuario = Depends(_puede_subir),
 ):
     """Procesa el Excel y guarda las calificaciones en DB (sobreescribe si ya existen).
-    Un docente solo puede guardar calificaciones de sus propias asignaturas."""
-    solo_mis_asignaturas = current_user.id if current_user.rol.nombre == "DOCENTE" else None
+    Docente: solo sus materias; jefe: su área; director: todas."""
     if tipo.upper() not in TIPOS_VALIDOS:
         raise HTTPException(status_code=400, detail=f"tipo debe ser INTERCICLO o FINAL, recibido: {tipo}")
 
@@ -153,11 +175,12 @@ async def confirmar_calificaciones(
         ruta_tmp = tmp.name
 
     try:
-        asignaciones = _cargar_asignaciones(db, consejo.periodo_id, solo_mis_asignaturas)
+        uid, areas = _alcance_por_rol(db, current_user, consejo.periodo_id)
+        asignaciones = _cargar_asignaciones(db, consejo.periodo_id, uid, areas)
         if not asignaciones:
             detalle = ("No tienes asignaturas registradas en este período"
-                       if solo_mis_asignaturas
-                       else "No hay asignaciones registradas para este período")
+                       if (uid or areas) else
+                       "No hay asignaciones registradas para este período")
             raise HTTPException(status_code=400, detail=detalle)
 
         resultados = procesar_excel(ruta_tmp, tipo.upper(), asignaciones)
