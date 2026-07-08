@@ -8,6 +8,7 @@ interface UsuarioRow {
   email_institucional: string
   rol_id: number
   activo: boolean
+  rol_efectivo?: string | null
 }
 
 type FormData = {
@@ -42,7 +43,7 @@ export default function Usuarios() {
     setError('')
     try {
       const params: Record<string, string> = {}
-      if (filtroRol) params.rol_id = filtroRol
+      if (filtroRol) params.rol = filtroRol  // filtra por rol EFECTIVO
       if (filtroActivo !== '') params.activo = filtroActivo
       const [uRes, rRes] = await Promise.all([
         api.get<ApiResponse<UsuarioRow[]>>('/usuarios/', { params }),
@@ -139,6 +140,11 @@ export default function Usuarios() {
     return r ? r.nombre.replace('_', ' ') : `#${id}`
   }
 
+  // Rol a mostrar: el efectivo (jefe si tiene jefatura activa) si viene del backend,
+  // si no, el rol base por rol_id.
+  const rolMostrado = (u: UsuarioRow): string =>
+    u.rol_efectivo ?? roles.find((r) => r.id === u.rol_id)?.nombre ?? ''
+
   const ROL_COLOR: Record<string, string> = {
     DIRECTOR_CARRERA: 'bg-ups-blue text-white',
     JEFE_AREA: 'bg-purple-100 text-purple-700',
@@ -169,7 +175,7 @@ export default function Usuarios() {
         >
           <option value="">Todos los roles</option>
           {roles.map((r) => (
-            <option key={r.id} value={r.id}>{r.nombre.replace('_', ' ')}</option>
+            <option key={r.id} value={r.nombre}>{r.nombre.replace('_', ' ')}</option>
           ))}
         </select>
         <select
@@ -211,8 +217,8 @@ export default function Usuarios() {
                     <td className="px-4 py-3 font-medium text-gray-800">{u.nombre_completo}</td>
                     <td className="px-4 py-3 text-gray-500">{u.email_institucional}</td>
                     <td className="px-4 py-3">
-                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${ROL_COLOR[roles.find((r) => r.id === u.rol_id)?.nombre ?? ''] ?? 'bg-gray-100 text-gray-600'}`}>
-                        {nombreRol(u.rol_id)}
+                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${ROL_COLOR[rolMostrado(u)] ?? 'bg-gray-100 text-gray-600'}`}>
+                        {rolMostrado(u).replace('_', ' ') || nombreRol(u.rol_id)}
                       </span>
                     </td>
                     <td className="px-4 py-3">

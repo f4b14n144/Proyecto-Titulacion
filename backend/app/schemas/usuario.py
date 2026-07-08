@@ -25,6 +25,8 @@ class UsuarioOut(BaseModel):
     email_institucional: str
     rol_id: int
     activo: bool
+    # Rol con el que opera realmente (DIRECTOR/JEFE_AREA por jefatura activa/DOCENTE)
+    rol_efectivo: Optional[str] = None
 
 
 class RolOut(BaseModel):

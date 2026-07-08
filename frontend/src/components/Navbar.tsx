@@ -46,6 +46,8 @@ export default function Navbar() {
     <>
       <header className="bg-ups-blue text-white h-14 flex items-center justify-between px-6 shadow">
         <div className="flex items-center gap-3">
+          <img src="/logo_ups.png" alt="UPS"
+            className="w-9 h-9 object-contain bg-white rounded-full p-0.5" />
           <span className="font-bold text-lg tracking-wide">Sistema Informes UPS</span>
           <span className="text-xs bg-white/20 px-2 py-0.5 rounded">Carrera de Computación</span>
         </div>

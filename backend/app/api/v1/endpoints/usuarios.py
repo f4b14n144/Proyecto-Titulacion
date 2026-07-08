@@ -1,7 +1,7 @@
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from app.core.deps import get_db, require_role
+from app.core.deps import get_db, require_role, calcular_rol_efectivo
 from app.core.security import hash_password
 from app.models.usuario import Usuario
 from app.models.rol import Rol
@@ -17,6 +17,7 @@ _director_o_jefe = require_role("DIRECTOR_CARRERA", "JEFE_AREA")  # lectura comp
 def listar_usuarios(
     activo: Optional[bool] = Query(None),
     rol_id: Optional[int] = Query(None),
+    rol: Optional[str] = Query(None, description="Filtra por rol EFECTIVO (DIRECTOR_CARRERA/JEFE_AREA/DOCENTE)"),
     db: Session = Depends(get_db),
     _: Usuario = Depends(_director_o_jefe),
 ):
@@ -26,6 +27,12 @@ def listar_usuarios(
     if rol_id is not None:
         q = q.filter(Usuario.rol_id == rol_id)
     usuarios = q.all()
+    # Adjuntar el rol efectivo (jefe si tiene jefatura activa) para mostrarlo en la lista
+    for u in usuarios:
+        u.rol_efectivo = calcular_rol_efectivo(db, u)
+    # Filtro por rol efectivo (el jefe tiene base DOCENTE, así que no basta con rol_id)
+    if rol:
+        usuarios = [u for u in usuarios if u.rol_efectivo == rol]
     return {"data": [UsuarioOut.model_validate(u) for u in usuarios], "message": "OK", "success": True}
 
 

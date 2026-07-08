@@ -1,5 +1,18 @@
 import api from './api'
 
+/** Obtiene el .docx del informe como Blob (para previsualizar o descargar). */
+export async function obtenerDocxBlob(informeId: number): Promise<Blob> {
+  // Cache-busting: el navegador cacheaba /descargar y mostraba versiones viejas
+  const res = await api.get(`/informes/${informeId}/descargar`, {
+    responseType: 'blob',
+    params: { _t: Date.now() },
+    headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' },
+  })
+  return new Blob([res.data], {
+    type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  })
+}
+
 /**
  * Descarga el .docx de un informe usando axios (con el token JWT del interceptor).
  * Un <a href> normal no envía el header Authorization, por eso daba 401.

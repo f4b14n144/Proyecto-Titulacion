@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { renderAsync } from 'docx-preview'
 import api from '../../services/api'
-import { descargarInforme } from '../../services/informes.service'
+import { descargarInforme, obtenerDocxBlob } from '../../services/informes.service'
 import { formatEstado } from '../../utils/formatters'
-import PreviewInforme from '../../components/PreviewInforme'
 import { Eye, Download, X } from 'lucide-react'
 import type { Area, ApiResponse } from '../../types'
 
@@ -42,6 +42,8 @@ export default function VerInformes() {
   const [descargando, setDescargando] = useState<number | null>(null)
   const [preview, setPreview] = useState<Informe | null>(null)
   const [cargandoPreview, setCargandoPreview] = useState(false)
+  const [previewError, setPreviewError] = useState('')
+  const docxRef = useRef<HTMLDivElement>(null)
 
   const cargar = async () => {
     setCargando(true)
@@ -84,18 +86,40 @@ export default function VerInformes() {
     }
   }
 
-  const verPreview = async (inf: Informe) => {
-    setCargandoPreview(true)
-    setError('')
-    try {
-      const { data } = await api.get<ApiResponse<Informe>>(`/informes/${inf.id}`)
-      setPreview(data.data)
-    } catch {
-      setError('No se pudo cargar la vista previa.')
-    } finally {
-      setCargandoPreview(false)
-    }
+  const verPreview = (inf: Informe) => {
+    setPreviewError('')
+    setPreview(inf)
   }
+
+  // Cuando se abre el preview, renderiza el .docx real dentro del modal
+  useEffect(() => {
+    if (!preview) return
+    let cancelado = false
+    const render = async () => {
+      if (!preview.ruta_docx) {
+        setPreviewError('Este informe aún no tiene documento generado. Genéralo desde el panel del jefe de área.')
+        return
+      }
+      setCargandoPreview(true)
+      setPreviewError('')
+      try {
+        const blob = await obtenerDocxBlob(preview.id)
+        // Esperar a que el contenedor exista en el DOM
+        await new Promise((r) => setTimeout(r, 50))
+        if (cancelado || !docxRef.current) return
+        docxRef.current.innerHTML = ''
+        await renderAsync(blob, docxRef.current, undefined, {
+          className: 'docx', inWrapper: true, ignoreWidth: false, ignoreHeight: false,
+        })
+      } catch {
+        if (!cancelado) setPreviewError('No se pudo renderizar el documento.')
+      } finally {
+        if (!cancelado) setCargandoPreview(false)
+      }
+    }
+    render()
+    return () => { cancelado = true }
+  }, [preview])
 
   return (
     <div className="p-6">
@@ -198,14 +222,18 @@ export default function VerInformes() {
                 </button>
               </div>
             </div>
-            <div className="overflow-y-auto p-5">
-              {cargandoPreview ? (
-                <div className="flex justify-center py-10">
+            <div className="overflow-y-auto p-5 bg-gray-100">
+              {cargandoPreview && (
+                <div className="flex flex-col items-center gap-3 py-10">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-ups-blue" />
+                  <p className="text-sm text-gray-500">Cargando documento…</p>
                 </div>
-              ) : preview ? (
-                <PreviewInforme tipo={preview.tipo_informe} contenido={preview.contenido_json ?? {}} />
-              ) : null}
+              )}
+              {previewError && (
+                <p className="text-red-600 text-sm bg-red-50 px-3 py-4 rounded text-center">{previewError}</p>
+              )}
+              {/* Aquí se renderiza el .docx real que se va a generar/descargar */}
+              <div ref={docxRef} className="docx-preview-container" />
             </div>
           </div>
         </div>

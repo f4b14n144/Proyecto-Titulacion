@@ -35,9 +35,8 @@ export default function Login() {
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
       <div className="bg-white rounded-xl shadow-lg p-8 w-full max-w-sm">
         <div className="text-center mb-6">
-          <div className="w-16 h-16 bg-ups-blue rounded-full flex items-center justify-center mx-auto mb-3">
-            <span className="text-white font-bold text-2xl">U</span>
-          </div>
+          <img src="/logo_ups.png" alt="Universidad Politécnica Salesiana"
+            className="w-32 h-32 object-contain mx-auto mb-3" />
           <h1 className="text-xl font-bold text-gray-800">Sistema Informes UPS</h1>
           <p className="text-sm text-gray-500 mt-1">Carrera de Computación</p>
         </div>

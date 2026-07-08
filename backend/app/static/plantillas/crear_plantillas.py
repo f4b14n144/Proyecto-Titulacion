@@ -20,6 +20,110 @@ DIR = Path(__file__).parent
 LOGO = DIR.parent / "logo-ups.jpg"  # app/static/logo-ups.jpg
 
 UPS_BLUE = RGBColor(0x00, 0x3D, 0xA5)
+GRIS_TEXTO = RGBColor(0x33, 0x33, 0x33)
+BLANCO = RGBColor(0xFF, 0xFF, 0xFF)
+AZUL_HEX = "003DA5"        # relleno encabezados de tabla
+GRIS_META_HEX = "E8EDF6"   # relleno columna de etiquetas (metadatos)
+
+
+def _aplicar_estilos(doc: Document):
+    """Define estilos base uniformes para TODOS los informes.
+
+    Así cada informe (1-4) se ve idéntico: misma tipografía, mismos tamaños
+    y colores de encabezado, mismo interlineado y justificado.
+    """
+    normal = doc.styles["Normal"]
+    normal.font.name = "Calibri"
+    normal.font.size = Pt(11)
+    normal.font.color.rgb = GRIS_TEXTO
+    pf = normal.paragraph_format
+    pf.space_after = Pt(6)
+    pf.line_spacing = 1.15
+    pf.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+
+    # Título del informe (Heading 1)
+    h1 = doc.styles["Heading 1"]
+    h1.font.name = "Calibri"
+    h1.font.size = Pt(18)
+    h1.font.bold = True
+    h1.font.color.rgb = UPS_BLUE
+    h1.paragraph_format.space_before = Pt(0)
+    h1.paragraph_format.space_after = Pt(12)
+
+    # Secciones principales (Heading 2)
+    h2 = doc.styles["Heading 2"]
+    h2.font.name = "Calibri"
+    h2.font.size = Pt(14)
+    h2.font.bold = True
+    h2.font.color.rgb = UPS_BLUE
+    h2.paragraph_format.space_before = Pt(14)
+    h2.paragraph_format.space_after = Pt(4)
+
+    # Subsecciones (Heading 3)
+    h3 = doc.styles["Heading 3"]
+    h3.font.name = "Calibri"
+    h3.font.size = Pt(12)
+    h3.font.bold = True
+    h3.font.color.rgb = RGBColor(0x22, 0x22, 0x22)
+    h3.paragraph_format.space_before = Pt(8)
+    h3.paragraph_format.space_after = Pt(2)
+
+
+def _sombrear(cell, hexcolor: str):
+    """Rellena el fondo de una celda con un color."""
+    tcPr = cell._tc.get_or_add_tcPr()
+    shd = OxmlElement("w:shd")
+    shd.set(qn("w:val"), "clear")
+    shd.set(qn("w:color"), "auto")
+    shd.set(qn("w:fill"), hexcolor)
+    tcPr.append(shd)
+
+
+def _celda(cell, texto: str, *, negrita=False, blanco=False, relleno=None):
+    """Escribe texto en una celda con formato uniforme."""
+    cell.text = texto
+    for run in cell.paragraphs[0].runs:
+        run.font.name = "Calibri"
+        run.font.size = Pt(11)
+        run.font.bold = negrita
+        run.font.color.rgb = BLANCO if blanco else GRIS_TEXTO
+    if relleno:
+        _sombrear(cell, relleno)
+
+
+def _meta(doc: Document, filas):
+    """Tabla de metadatos uniforme: etiqueta (sombreada) | valor."""
+    tabla = doc.add_table(rows=0, cols=2)
+    tabla.style = "Table Grid"
+    for etiqueta, marcador in filas:
+        fila = tabla.add_row()
+        _celda(fila.cells[0], etiqueta, negrita=True, relleno=GRIS_META_HEX)
+        _celda(fila.cells[1], marcador)
+        fila.cells[0].width = Inches(2.3)
+        fila.cells[1].width = Inches(4.2)
+    doc.add_paragraph()
+    return tabla
+
+
+def _tabla_datos(doc: Document, encabezados):
+    """Crea una tabla con fila de encabezado azul + texto blanco."""
+    tbl = doc.add_table(rows=1, cols=len(encabezados))
+    tbl.style = "Table Grid"
+    for i, h in enumerate(encabezados):
+        _celda(tbl.rows[0].cells[i], h, negrita=True, blanco=True, relleno=AZUL_HEX)
+    return tbl
+
+
+def _firmas(doc: Document, columnas):
+    """Bloque de firmas uniforme. columnas: [(titulo, marcador_nombre), ...]."""
+    doc.add_paragraph()
+    doc.add_heading("Firmas de responsabilidad", level=2)
+    tf = doc.add_table(rows=3, cols=len(columnas))
+    tf.style = "Table Grid"
+    for i, (titulo, marcador) in enumerate(columnas):
+        _celda(tf.rows[0].cells[i], titulo, negrita=True, blanco=True, relleno=AZUL_HEX)
+        tf.rows[1].cells[i].text = "\n\n_______________________"
+        _celda(tf.rows[2].cells[i], marcador, negrita=True)
 
 
 def _add_campo(parrafo, instr: str):
@@ -41,46 +145,66 @@ def _configurar_seccion(doc: Document):
     """Header con logo UPS + footer con 'Carrera de Computación' y numeración X/Y."""
     section = doc.sections[0]
 
-    # Encabezado: logo centrado
+    # Encabezado: logo institucional arriba a la IZQUIERDA + línea divisoria
     header = section.header
     hp = header.paragraphs[0]
-    hp.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    hp.alignment = WD_ALIGN_PARAGRAPH.LEFT
     if LOGO.exists():
-        hp.add_run().add_picture(str(LOGO), width=Inches(1.4))
+        hp.add_run().add_picture(str(LOGO), width=Inches(2.4))
+    # Línea horizontal bajo el logo (borde inferior del párrafo)
+    _borde_inferior(hp)
 
-    # Pie de página: nombre de la carrera + número de página "X / Y"
+    # Pie de página: línea divisoria + carrera (izq) y número de página "X / Y" (der)
     footer = section.footer
     fp = footer.paragraphs[0]
-    fp.text = "Carrera de Computación"
-    fp.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    _borde_superior(fp)
+    # Tabulación: texto a la izquierda, numeración a la derecha
+    from docx.enum.text import WD_TAB_ALIGNMENT
+    from docx.shared import Cm
+    fp.paragraph_format.tab_stops.add_tab_stop(Cm(16.5), WD_TAB_ALIGNMENT.RIGHT)
+    fp.add_run("Carrera de Computación — Universidad Politécnica Salesiana, Sede Cuenca")
+    fp.add_run("\tPág. ")
+    _add_campo(fp, "PAGE")
+    fp.add_run(" / ")
+    _add_campo(fp, "NUMPAGES")
 
-    pp = footer.add_paragraph()
-    pp.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    _add_campo(pp, "PAGE")
-    pp.add_run(" / ")
-    _add_campo(pp, "NUMPAGES")
+
+def _borde(parrafo, lado: str):
+    """Agrega un borde (top/bottom) al párrafo (línea divisoria)."""
+    p = parrafo._p.get_or_add_pPr()
+    pbdr = OxmlElement("w:pBdr")
+    borde = OxmlElement(f"w:{lado}")
+    borde.set(qn("w:val"), "single")
+    borde.set(qn("w:sz"), "6")
+    borde.set(qn("w:space"), "4")
+    borde.set(qn("w:color"), "003DA5")
+    pbdr.append(borde)
+    p.append(pbdr)
+
+
+def _borde_inferior(parrafo):
+    _borde(parrafo, "bottom")
+
+
+def _borde_superior(parrafo):
+    _borde(parrafo, "top")
 
 
 def _encabezado_institucional(doc: Document, tipo: int, nombre: str):
     """Bloque de encabezado UPS común a todos los informes."""
-    _configurar_seccion(doc)  # logo en header + footer con numeración en todas las hojas
+    _aplicar_estilos(doc)         # estilos uniformes (tipografía, headings, interlineado)
+    _configurar_seccion(doc)      # logo en header + footer con numeración en todas las hojas
 
-    t = doc.add_heading("UNIVERSIDAD POLITÉCNICA SALESIANA — SEDE CUENCA", level=1)
-    t.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    t.runs[0].font.color.rgb = UPS_BLUE
-
-    s = doc.add_heading("Carrera de Computación", level=2)
-    s.alignment = WD_ALIGN_PARAGRAPH.CENTER
-
-    n = doc.add_heading(f"INFORME {tipo} — {nombre.upper()}", level=2)
+    n = doc.add_heading(f"INFORME {tipo} — {nombre.upper()}", level=1)
     n.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    sub = doc.add_paragraph("Carrera de Computación · Consejo de Carrera")
+    sub.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    for run in sub.runs:
+        run.font.size = Pt(10)
+        run.font.color.rgb = GRIS_TEXTO
+        run.italic = True
     doc.add_paragraph()
-
-
-def _fila_meta(tabla, etiqueta: str, marcador: str):
-    fila = tabla.add_row()
-    fila.cells[0].text = etiqueta
-    fila.cells[1].text = marcador
 
 
 def crear_informe_1():
@@ -89,12 +213,11 @@ def crear_informe_1():
     _encabezado_institucional(doc, 1, "Centro Docente")
 
     # Metadatos
-    tabla = doc.add_table(rows=0, cols=2)
-    tabla.style = "Table Grid"
-    _fila_meta(tabla, "Período académico:", "{{ periodo_nombre }}")
-    _fila_meta(tabla, "Fecha del Consejo:", "{{ fecha_consejo }}")
-    _fila_meta(tabla, "Fecha del informe:", "{{ fecha_informe }}")
-    doc.add_paragraph()
+    _meta(doc, [
+        ("Período académico:", "{{ periodo_nombre }}"),
+        ("Fecha del Consejo:", "{{ fecha_consejo }}"),
+        ("Fecha del informe:", "{{ fecha_informe }}"),
+    ])
 
     # Secciones del formulario
     for titulo, marcador in [
@@ -105,20 +228,13 @@ def crear_informe_1():
         ("5. Resoluciones y compromisos", "{{ resoluciones }}"),
         ("6. Observaciones adicionales", "{{ observaciones_adicionales }}"),
     ]:
-        doc.add_heading(titulo, level=3)
+        doc.add_heading(titulo, level=2)
         doc.add_paragraph(marcador)
-        doc.add_paragraph()
 
-    # Firmas
-    doc.add_heading("Firmas de responsabilidad", level=2)
-    tf = doc.add_table(rows=3, cols=2)
-    tf.style = "Table Grid"
-    tf.rows[0].cells[0].text = "Director/a de Carrera"
-    tf.rows[0].cells[1].text = "Secretaria"
-    tf.rows[1].cells[0].text = "\n\n{{ firma_director }}"
-    tf.rows[1].cells[1].text = "\n\n_______________________"
-    tf.rows[2].cells[0].text = "{{ nombre_director }}"
-    tf.rows[2].cells[1].text = ""
+    _firmas(doc, [
+        ("Director/a de Carrera", "{{ nombre_director }}"),
+        ("Secretaria", ""),
+    ])
 
     ruta = DIR / "informe_1_plantilla.docx"
     doc.save(str(ruta))
@@ -130,12 +246,11 @@ def crear_informe_2():
     doc = Document()
     _encabezado_institucional(doc, 2, "Revisión AVAC")
 
-    tabla_meta = doc.add_table(rows=0, cols=2)
-    tabla_meta.style = "Table Grid"
-    _fila_meta(tabla_meta, "Período:", "{{ periodo_nombre }}")
-    _fila_meta(tabla_meta, "Área:", "{{ area_nombre }}")
-    _fila_meta(tabla_meta, "Jefe de Área:", "{{ jefe_nombre }}")
-    doc.add_paragraph()
+    _meta(doc, [
+        ("Período:", "{{ periodo_nombre }}"),
+        ("Área:", "{{ area_nombre }}"),
+        ("Jefe de Área:", "{{ jefe_nombre }}"),
+    ])
 
     doc.add_heading("Resultados del Checklist AVAC", level=2)
     doc.add_paragraph(
@@ -158,14 +273,11 @@ def crear_informe_2():
         ("Actividad de investigación", "actividad_investigacion"),
         ("Proyecto integrador", "proyecto_integrador"),
     ]
-    tbl = doc.add_table(rows=1, cols=2)
-    tbl.style = "Table Grid"
-    tbl.rows[0].cells[0].text = "Parámetro"
-    tbl.rows[0].cells[1].text = "Cumple"
+    tbl = _tabla_datos(doc, ["Parámetro", "Cumple"])
     for nombre, campo in params:
         fila = tbl.add_row()
-        fila.cells[0].text = nombre
-        fila.cells[1].text = f"{{{{ 'Sí' if item.{campo} else 'No' }}}}"
+        _celda(fila.cells[0], nombre)
+        _celda(fila.cells[1], f"{{{{ 'Sí' if item.{campo} else 'No' }}}}")
     doc.add_paragraph()
     doc.add_paragraph("Observaciones: {{ item.observaciones }}")
     doc.add_paragraph("Acciones de mejora: {{ item.acciones_mejora }}")
@@ -174,13 +286,10 @@ def crear_informe_2():
     doc.add_heading("Análisis de cumplimiento del área", level=2)
     doc.add_paragraph("{{ analisis_area }}")
 
-    doc.add_heading("Firmas", level=2)
-    tf = doc.add_table(rows=2, cols=2)
-    tf.style = "Table Grid"
-    tf.rows[0].cells[0].text = "Jefe de Área"
-    tf.rows[0].cells[1].text = "Director/a de Carrera"
-    tf.rows[1].cells[0].text = "\n\n_______________________"
-    tf.rows[1].cells[1].text = "\n\n_______________________"
+    _firmas(doc, [
+        ("Jefe de Área", ""),
+        ("Director/a de Carrera", ""),
+    ])
 
     ruta = DIR / "informe_2_plantilla.docx"
     doc.save(str(ruta))
@@ -192,20 +301,16 @@ def crear_informe_3():
     doc = Document()
     _encabezado_institucional(doc, 3, "Visitas Áulicas e Interciclo")
 
-    tabla_meta = doc.add_table(rows=0, cols=2)
-    tabla_meta.style = "Table Grid"
-    _fila_meta(tabla_meta, "Período:", "{{ periodo_nombre }}")
-    _fila_meta(tabla_meta, "Área:", "{{ area_nombre }}")
-    _fila_meta(tabla_meta, "Jefe de Área:", "{{ jefe_nombre }}")
-    doc.add_paragraph()
+    _meta(doc, [
+        ("Período:", "{{ periodo_nombre }}"),
+        ("Área:", "{{ area_nombre }}"),
+        ("Jefe de Área:", "{{ jefe_nombre }}"),
+    ])
 
     doc.add_heading("PARTE A — Visitas Áulicas", level=2)
     doc.add_paragraph("{% for v in visitas %}")
     doc.add_heading("{{ v.docente }} — {{ v.asignatura }} (Grupo {{ v.grupo }})", level=3)
-    tbl = doc.add_table(rows=1, cols=2)
-    tbl.style = "Table Grid"
-    tbl.rows[0].cells[0].text = "Parámetro"
-    tbl.rows[0].cells[1].text = "Cumple"
+    tbl = _tabla_datos(doc, ["Parámetro", "Cumple"])
     for nombre, campo in [
         ("Visita realizada", "visita_realizada"),
         ("Puntualidad del docente", "puntualidad_docente"),
@@ -215,8 +320,8 @@ def crear_informe_3():
         ("Actividad de investigación", "actividad_investigacion"),
     ]:
         fila = tbl.add_row()
-        fila.cells[0].text = nombre
-        fila.cells[1].text = f"{{{{ 'Sí' if v.{campo} else 'No' }}}}"
+        _celda(fila.cells[0], nombre)
+        _celda(fila.cells[1], f"{{{{ 'Sí' if v.{campo} else 'No' }}}}")
     doc.add_paragraph("Observaciones estudiantes: {{ v.observaciones_estudiantes }}")
     doc.add_paragraph("Observaciones docente: {{ v.observaciones_docente }}")
     doc.add_paragraph("Acciones docente: {{ v.acciones_docente }}")
@@ -225,8 +330,7 @@ def crear_informe_3():
     doc.add_heading("PARTE B — Calificaciones Interciclo (Parcial 1)", level=2)
     doc.add_paragraph("{% for c in calificaciones_interciclo %}")
     doc.add_heading("{{ c.asignatura }} — Grupo {{ c.grupo }}", level=3)
-    tbl2 = doc.add_table(rows=0, cols=2)
-    tbl2.style = "Table Grid"
+    tbl2 = _tabla_datos(doc, ["Indicador", "Valor"])
     for etiqueta, campo in [
         ("Total estudiantes", "total_estudiantes"),
         ("Nota máxima /50", "maximo"),
@@ -238,19 +342,16 @@ def crear_informe_3():
         ("Rango bajo (<30)", "rango_bajo"),
     ]:
         fila = tbl2.add_row()
-        fila.cells[0].text = etiqueta
-        fila.cells[1].text = f"{{{{ c.{campo} }}}}"
+        _celda(fila.cells[0], etiqueta, negrita=True, relleno=GRIS_META_HEX)
+        _celda(fila.cells[1], f"{{{{ c.{campo} }}}}")
     doc.add_paragraph("Análisis narrativo: {{ c.analisis_narrativo }}")
     doc.add_paragraph("Acciones de mejora: {{ c.acciones_mejora }}")
     doc.add_paragraph("{% endfor %}")
 
-    doc.add_heading("Firmas", level=2)
-    tf = doc.add_table(rows=2, cols=2)
-    tf.style = "Table Grid"
-    tf.rows[0].cells[0].text = "Jefe de Área"
-    tf.rows[0].cells[1].text = "Director/a de Carrera"
-    tf.rows[1].cells[0].text = "\n\n_______________________"
-    tf.rows[1].cells[1].text = "\n\n_______________________"
+    _firmas(doc, [
+        ("Jefe de Área", ""),
+        ("Director/a de Carrera", ""),
+    ])
 
     ruta = DIR / "informe_3_plantilla.docx"
     doc.save(str(ruta))
@@ -262,12 +363,11 @@ def crear_informe_4():
     doc = Document()
     _encabezado_institucional(doc, 4, "Análisis Final de Calificaciones")
 
-    tabla_meta = doc.add_table(rows=0, cols=2)
-    tabla_meta.style = "Table Grid"
-    _fila_meta(tabla_meta, "Período:", "{{ periodo_nombre }}")
-    _fila_meta(tabla_meta, "Área:", "{{ area_nombre }}")
-    _fila_meta(tabla_meta, "Jefe de Área:", "{{ jefe_nombre }}")
-    doc.add_paragraph()
+    _meta(doc, [
+        ("Período:", "{{ periodo_nombre }}"),
+        ("Área:", "{{ area_nombre }}"),
+        ("Jefe de Área:", "{{ jefe_nombre }}"),
+    ])
 
     doc.add_paragraph("{% for c in calificaciones_finales %}")
     doc.add_heading("{{ c.docente }} — {{ c.asignatura }} (Grupo {{ c.grupo }})", level=2)
@@ -301,13 +401,10 @@ def crear_informe_4():
     doc.add_heading("Acciones generales del área", level=3)
     doc.add_paragraph("{{ acciones_generales_area }}")
 
-    doc.add_heading("Firmas", level=2)
-    tf = doc.add_table(rows=2, cols=2)
-    tf.style = "Table Grid"
-    tf.rows[0].cells[0].text = "Jefe de Área"
-    tf.rows[0].cells[1].text = "Director/a de Carrera"
-    tf.rows[1].cells[0].text = "\n\n_______________________"
-    tf.rows[1].cells[1].text = "\n\n_______________________"
+    _firmas(doc, [
+        ("Jefe de Área", ""),
+        ("Director/a de Carrera", ""),
+    ])
 
     ruta = DIR / "informe_4_plantilla.docx"
     doc.save(str(ruta))
