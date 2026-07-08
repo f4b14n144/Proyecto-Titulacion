@@ -40,3 +40,15 @@ logs/
 
 # Alembic
 # NO ignorar versions/ — los archivos de migración van al repo
+
+# Documentos de desarrollo / asistente IA (no van al repo)
+# Solo README.md permanece como documentación pública.
+CLAUDE.md
+.claude/
+docs/
+prompt_claude_code_COMPLETO.txt
+
+# Imágenes/recursos sueltos de desarrollo en la raíz
+# (los logos en uso están en frontend/public/ y backend/app/static/)
+/logo-ups-home.jpg
+/logo_ups.png
