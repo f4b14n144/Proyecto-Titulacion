@@ -19,11 +19,14 @@ from app.models.jefatura import JefaturaArea
 from app.core.security import hash_password
 
 
-# (email, nombre, rol, password)
+# (email, nombre, rol_base, password)
+# El rol BASE de todo profesor es DOCENTE. La jefatura (asignada abajo) es la
+# que hace que el usuario opere como JEFE_AREA (rol efectivo). Solo el director
+# tiene rol DIRECTOR_CARRERA.
 CUENTAS = [
     ("director@ups.edu.ec",     "Director de Carrera (Prueba)", "DIRECTOR_CARRERA", "director123"),
-    ("jefe@ups.edu.ec",         "Jefe de Área (Prueba)",        "JEFE_AREA",        "jefe123"),
-    ("docente@ups.edu.ec",      "Docente (Prueba)",             "DOCENTE",          "docente123"),
+    ("jefe@ups.edu.ec",         "Docente Jefe de Área (Prueba)", "DOCENTE",         "pass123"),
+    ("docente@ups.edu.ec",      "Docente (Prueba)",             "DOCENTE",          "pass123"),
 ]
 
 # Área a la que se asigna el jefe (debe tener informes para probar el panel)

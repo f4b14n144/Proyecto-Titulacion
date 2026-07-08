@@ -35,19 +35,28 @@ export default function Informe1() {
     ]).then(([p, c]) => { setPeriodos(p.data.data); setConsejos(c.data.data) })
   }, [])
 
+  const pintarInforme = (inf1: Informe) => {
+    setInforme(inf1)
+    const contenido = inf1.contenido_json as Record<string, unknown>
+    const secsRaw = (contenido.secciones as Record<string, string>) ?? {}
+    setSecciones(secsRaw)
+    setNombreDirector((contenido.nombre_director as string) ?? '')
+  }
+
   const cargarInforme = async (cId: string) => {
     if (!cId) return
     try {
       const { data } = await api.get<ApiResponse<Informe[]>>('/informes/', { params: { consejo_id: cId } })
-      const inf1 = data.data.find((i) => i.tipo_informe === 1) ?? null
-      if (inf1) {
-        setInforme(inf1)
-        const contenido = inf1.contenido_json as Record<string, unknown>
-        const secsRaw = (contenido.secciones as Record<string, string>) ?? {}
-        setSecciones(secsRaw)
-        setNombreDirector((contenido.nombre_director as string) ?? '')
+      let inf1 = data.data.find((i) => i.tipo_informe === 1) ?? null
+      if (!inf1) {
+        // No existe aún: lo generamos para que se auto-llenen jefes de área y director
+        await api.post('/informes/generar-borrador', { consejo_id: Number(cId), area_id: 1, tipo_informe: 1 })
+        await new Promise((r) => setTimeout(r, 1200))
+        const res = await api.get<ApiResponse<Informe[]>>('/informes/', { params: { consejo_id: cId } })
+        inf1 = res.data.data.find((i) => i.tipo_informe === 1) ?? null
       }
-    } catch { /* informe aún no existe */ }
+      if (inf1) pintarInforme(inf1)
+    } catch { /* sin permisos o error */ }
   }
 
   const seleccionarConsejo = (id: string) => {

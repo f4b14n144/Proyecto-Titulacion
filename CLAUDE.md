@@ -30,8 +30,16 @@ Repo: https://github.com/f4b14n144/Proyecto-Titulacion.git
 
 ## Cuentas de prueba (creadas con seed_test_users.py)
 - Director: director@ups.edu.ec / director123
-- Jefe de área: jefe@ups.edu.ec / jefe123  (Área: Programación y Software)
-- Docente: docente@ups.edu.ec / docente123
+- Jefe de área: jefe@ups.edu.ec / pass123  (rol base DOCENTE + jefatura de Programación → opera como JEFE por rol efectivo)
+- Docente: docente@ups.edu.ec / pass123
+- Todos los docentes (incl. los 39 del P67): contraseña por defecto pass123 (reset_passwords_docentes.py)
+
+## Modelo de roles (congruente)
+- Rol base de todo profesor: DOCENTE. Solo el director tiene DIRECTOR_CARRERA.
+- Rol EFECTIVO (calcular_rol_efectivo en deps.py): director siempre; JEFE_AREA si
+  tiene jefatura en período activo; si no, DOCENTE. get_current_user lo adjunta y
+  /me + require_role lo usan. Asignar/quitar jefatura cambia el panel al que entra.
+- Informe 1 auto-llena designaciones de jefes (jefaturas del período) y nombre del director.
 
 ## NOTA IMPORTANTE — Proveedor de IA
 - Se usa GROQ (free tier sin tarjeta): AI_PROVIDER=groq, AI_MODEL=groq/llama-3.3-70b-versatile

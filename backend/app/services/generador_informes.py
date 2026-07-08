@@ -103,6 +103,30 @@ def generar_informe_1(db: Session, consejo_id: int, area_id: int) -> Informe:
     consejo = db.query(ConsejoCarrera).filter(ConsejoCarrera.id == consejo_id).first()
     periodo = db.query(PeriodoAcademico).filter(PeriodoAcademico.id == consejo.periodo_id).first()
 
+    # Designaciones de jefes de área: se llenan automáticamente con las
+    # jefaturas asignadas en el sistema para el período del consejo.
+    from app.models.jefatura import JefaturaArea
+    filas = (
+        db.query(JefaturaArea, Area, Usuario)
+        .join(Area, JefaturaArea.area_id == Area.id)
+        .join(Usuario, JefaturaArea.usuario_id == Usuario.id)
+        .filter(JefaturaArea.periodo_id == consejo.periodo_id)
+        .order_by(Area.nombre)
+        .all()
+    )
+    designaciones = "\n".join(
+        f"• {area.nombre}: {usuario.nombre_completo}" for _, area, usuario in filas
+    ) or "No hay jefes de área asignados para este período."
+
+    # Nombre del director de carrera: se llena automáticamente.
+    from app.models.rol import Rol
+    director = (
+        db.query(Usuario).join(Rol, Usuario.rol_id == Rol.id)
+        .filter(Rol.nombre == "DIRECTOR_CARRERA", Usuario.activo == True)
+        .first()
+    )
+    nombre_director = director.nombre_completo if director else ""
+
     informe = _obtener_o_crear_informe(db, consejo_id, area_id, 1)
     informe.contenido_json = {
         "periodo_nombre": periodo.nombre if periodo else "",
@@ -110,18 +134,18 @@ def generar_informe_1(db: Session, consejo_id: int, area_id: int) -> Informe:
         "fecha_informe": str(datetime.now(timezone.utc).date()),
         "secciones": {
             "agenda": "",
-            "designaciones": "",
+            "designaciones": designaciones,
             "observaciones_curriculares": "",
             "resultados_encuestas": "",
             "resoluciones": "",
             "observaciones_adicionales": "",
         },
-        "nombre_director": "",
+        "nombre_director": nombre_director,
         "firma_director": "",
     }
     informe.estado = "BORRADOR"
     db.commit()
-    logger.info(f"Informe 1 creado — consejo {consejo_id} área {area_id}")
+    logger.info(f"Informe 1 creado — consejo {consejo_id} área {area_id} — {len(filas)} jefes, director: {nombre_director}")
     return informe
 
 
