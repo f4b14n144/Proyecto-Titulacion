@@ -353,6 +353,15 @@ def crear_informe_3():
         _celda(fila.cells[1], f"{{{{ c.{campo} }}}}")
     doc.add_paragraph("Análisis narrativo: {{ c.analisis_narrativo }}")
     doc.add_paragraph("Acciones de mejora: {{ c.acciones_mejora }}")
+    # Aportes registrados por el docente sobre la materia (sumativos)
+    doc.add_paragraph("{%p if c.observaciones_materia %}")
+    doc.add_heading("Observaciones del Docente a la Materia", level=3)
+    doc.add_paragraph("{{ c.observaciones_materia }}")
+    doc.add_paragraph("{%p endif %}")
+    doc.add_paragraph("{%p if c.acciones_mejora_docente %}")
+    doc.add_heading("Acciones de Mejora propuestas por el Docente", level=3)
+    doc.add_paragraph("{{ c.acciones_mejora_docente }}")
+    doc.add_paragraph("{%p endif %}")
     doc.add_paragraph("{% endfor %}")
 
     _firmas(doc, [
@@ -397,8 +406,15 @@ def crear_informe_4():
     doc.add_heading("Acciones de mejora sugeridas", level=3)
     doc.add_paragraph("{{ c.acciones_mejora }}")
 
-    doc.add_heading("Observaciones de la materia (docente)", level=3)
+    # Aportes registrados por el docente sobre la materia (sumativos)
+    doc.add_paragraph("{%p if c.observaciones_materia %}")
+    doc.add_heading("Observaciones del Docente a la Materia", level=3)
     doc.add_paragraph("{{ c.observaciones_materia }}")
+    doc.add_paragraph("{%p endif %}")
+    doc.add_paragraph("{%p if c.acciones_mejora_docente %}")
+    doc.add_heading("Acciones de Mejora propuestas por el Docente", level=3)
+    doc.add_paragraph("{{ c.acciones_mejora_docente }}")
+    doc.add_paragraph("{%p endif %}")
     doc.add_paragraph()
     doc.add_paragraph("{% endfor %}")
 

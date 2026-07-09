@@ -3,7 +3,7 @@ import { useAuth } from '../hooks/useAuth'
 import {
   LayoutDashboard, Users, Calendar, Gavel, Layers, BookOpen,
   ClipboardList, Upload, FileText, Files, ClipboardCheck,
-  FileBarChart, MessageSquare, type LucideIcon,
+  FileBarChart, MessageSquare, Lightbulb, type LucideIcon,
 } from 'lucide-react'
 
 type Item = { to: string; label: string; icon: LucideIcon; exact?: boolean }
@@ -43,10 +43,11 @@ const jefeGroups: Grupo[] = [
   ]},
 ]
 
+// El docente no sube notas: consulta sus materias y registra aportes por materia
 const docenteGroups: Grupo[] = [
   { titulo: null, items: [
-    { to: '/docente', label: 'Dashboard', icon: LayoutDashboard, exact: true },
-    { to: '/docente/calificaciones', label: 'Subir mis notas', icon: Upload },
+    { to: '/docente', label: 'Mis materias', icon: LayoutDashboard, exact: true },
+    { to: '/docente/acciones-mejora', label: 'Acciones de mejora', icon: Lightbulb },
     { to: '/docente/observaciones', label: 'Observaciones', icon: MessageSquare },
   ]},
 ]

@@ -15,5 +15,5 @@ from app.models.checklist_avac import ChecklistAVAC  # noqa: F401
 from app.models.checklist_visita import ChecklistVisitaAulica  # noqa: F401
 from app.models.notificacion import Notificacion  # noqa: F401
 from app.models.respuesta_docente import RespuestaDocente  # noqa: F401
-from app.models.observacion_docente import ObservacionDocente  # noqa: F401
+from app.models.aporte_docente import AporteDocente  # noqa: F401
 from app.models.contenido_consejo import ContenidoConsejo  # noqa: F401

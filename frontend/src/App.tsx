@@ -22,6 +22,7 @@ import Informe3 from './pages/jefe_area/Informe3'
 import Informe4 from './pages/jefe_area/Informe4'
 import DocenteDashboard from './pages/docente/Dashboard'
 import DocenteObservaciones from './pages/docente/Observaciones'
+import DocenteAccionesMejora from './pages/docente/AccionesMejora'
 import { destinoPorRol } from './utils/roles'
 
 function AppLayout({ children }: { children: React.ReactNode }) {
@@ -97,9 +98,10 @@ export default function App() {
         element={
           <ProtectedRoute roles={['DOCENTE']}>
             <AppLayout>
+              {/* El docente NO sube notas: solo consulta sus materias y registra aportes */}
               <Routes>
                 <Route index element={<DocenteDashboard />} />
-                <Route path="calificaciones" element={<SubirCalificaciones />} />
+                <Route path="acciones-mejora" element={<DocenteAccionesMejora />} />
                 <Route path="observaciones" element={<DocenteObservaciones />} />
               </Routes>
             </AppLayout>

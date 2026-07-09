@@ -32,14 +32,15 @@ export default function DocenteDashboard() {
       </h1>
       <p className="text-gray-500 text-sm mb-6">Panel del Docente</p>
 
-      {/* Explicación del flujo por correo */}
+      {/* Cómo participa el docente */}
       <div className="bg-blue-50 border border-blue-200 rounded-xl px-5 py-4 mb-6 text-sm text-blue-800">
         <p className="font-medium mb-1">¿Cómo participas en el proceso de informes?</p>
         <p>
-          Cuando la Dirección active el flujo de un Consejo de Carrera, recibirás un
-          <strong> correo institucional</strong> solicitando tus observaciones sobre cada
-          asignatura que dictas. Solo debes <strong>responder ese correo</strong> — tu respuesta
-          se registra automáticamente y se incorpora al análisis del informe del área.
+          Por cada asignatura que dictas puedes registrar <strong>observaciones</strong> y{' '}
+          <strong>acciones de mejora</strong> desde el menú lateral. Cada registro se acumula
+          en el historial de esa materia y se incorpora al informe del área correspondiente.
+          También recibirás un correo institucional solicitándolas cuando la Dirección active
+          el flujo de un Consejo de Carrera.
         </p>
       </div>
 

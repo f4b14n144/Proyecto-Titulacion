@@ -73,6 +73,41 @@ def _asignaturas_del_area(db: Session, area_id: int, periodo_id: int) -> list[As
     )
 
 
+def _aportes_materia(
+    db: Session, consejo_id: int, asignatura_id: int, grupo: str
+) -> dict[str, str]:
+    """
+    Aportes que el docente registró sobre la materia-grupo, ya concatenados.
+
+    Son sumativos: se listan todos en orden cronológico, no solo el último.
+    """
+    from app.models.aporte_docente import AporteDocente
+
+    aportes = (
+        db.query(AporteDocente)
+        .filter(
+            AporteDocente.consejo_id == consejo_id,
+            AporteDocente.asignatura_id == asignatura_id,
+            AporteDocente.grupo == grupo,
+        )
+        .order_by(AporteDocente.creado_en)
+        .all()
+    )
+
+    def _juntar(tipo: str) -> str:
+        textos = [a.texto for a in aportes if a.tipo == tipo]
+        if not textos:
+            return ""
+        if len(textos) == 1:
+            return textos[0]
+        return "\n".join(f"• {t}" for t in textos)
+
+    return {
+        "observaciones_materia": _juntar("OBSERVACION"),
+        "acciones_mejora_docente": _juntar("ACCION_MEJORA"),
+    }
+
+
 def _respuesta_docente(db: Session, docente_id: int, consejo_id: int) -> str:
     """Recupera la última respuesta del docente para este consejo, si existe."""
     noti = (
@@ -369,6 +404,8 @@ def generar_informe_3(db: Session, consejo_id: int, area_id: int) -> Informe:
             "asignatura": asig.nombre if asig else f"#{asig_doc.asignatura_id}",
             "grupo": cal.datos_json.get("grupo", asig_doc.grupo),
             "docente": _nombre_usuario(db, asig_doc.usuario_id),
+            # Aportes sumativos que el docente registró sobre esta materia
+            **_aportes_materia(db, consejo_id, asig_doc.asignatura_id, asig_doc.grupo),
             **analisis,
         })
 
@@ -436,19 +473,14 @@ def generar_informe_4(db: Session, consejo_id: int, area_id: int) -> Informe:
         nombre_asig = asig.nombre if asig else f"#{asig_doc.asignatura_id}"
         grupo = cal.datos_json.get("grupo", asig_doc.grupo)
 
-        # Observación del docente sobre la materia (de cualquier co-dictante del grupo)
-        from app.models.observacion_docente import ObservacionDocente
-        obs = db.query(ObservacionDocente).filter(
-            ObservacionDocente.consejo_id == consejo_id,
-            ObservacionDocente.asignatura_id == asig_doc.asignatura_id,
-            ObservacionDocente.grupo == asig_doc.grupo,
-        ).first()
+        # Aportes sumativos del docente sobre la materia (observaciones + acciones)
+        aportes = _aportes_materia(db, consejo_id, asig_doc.asignatura_id, asig_doc.grupo)
 
         calificaciones_data.append({
             "asignatura": nombre_asig,
             "grupo": grupo,
             "docente": _nombre_usuario(db, asig_doc.usuario_id),
-            "observaciones_materia": obs.contenido if obs else "",
+            **aportes,
             **analisis,
         })
 

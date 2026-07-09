@@ -2,7 +2,7 @@ from fastapi import APIRouter
 from app.api.v1.endpoints import (
     health, auth, usuarios, periodos, consejos,
     areas, asignaturas, jefaturas, asignaciones, calificaciones, flujo, informes,
-    observaciones,
+    aportes,
 )
 
 api_router = APIRouter()
@@ -19,4 +19,4 @@ api_router.include_router(asignaciones.router, prefix="/asignaciones", tags=["as
 api_router.include_router(calificaciones.router, prefix="/calificaciones", tags=["calificaciones"])
 api_router.include_router(flujo.router, prefix="/flujo", tags=["flujo"])
 api_router.include_router(informes.router, prefix="/informes", tags=["informes"])
-api_router.include_router(observaciones.router, prefix="/observaciones", tags=["observaciones"])
+api_router.include_router(aportes.router, prefix="/aportes", tags=["aportes"])
