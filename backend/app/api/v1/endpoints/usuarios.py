@@ -49,6 +49,7 @@ def crear_usuario(
 
     nuevo = Usuario(
         nombre_completo=payload.nombre_completo,
+        titulo=payload.titulo,
         email_institucional=payload.email_institucional,
         hashed_password=hash_password(payload.password),
         rol_id=payload.rol_id,
@@ -84,6 +85,8 @@ def actualizar_usuario(
 
     if payload.nombre_completo is not None:
         usuario.nombre_completo = payload.nombre_completo
+    if payload.titulo is not None:
+        usuario.titulo = payload.titulo
     if payload.email_institucional is not None:
         usuario.email_institucional = payload.email_institucional
     if payload.password is not None:

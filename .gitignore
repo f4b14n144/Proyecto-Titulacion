@@ -52,3 +52,7 @@ prompt_claude_code_COMPLETO.txt
 # (los logos en uso están en frontend/public/ y backend/app/static/)
 /logo-ups-home.jpg
 /logo_ups.png
+
+# Datos institucionales: contienen nombres, cédulas y notas de estudiantes reales.
+# NO deben subirse al repositorio.
+*.xlsx

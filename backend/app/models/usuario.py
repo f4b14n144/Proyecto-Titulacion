@@ -9,6 +9,9 @@ class Usuario(Base):
 
     id = Column(Integer, primary_key=True)
     nombre_completo = Column(String, nullable=False)
+    # Título académico (Ing., Mg., PhD, Lic.). Se usa en la carátula de los
+    # informes ("Ing. Marcelo Flores V.") y en los correos personalizados.
+    titulo = Column(String, nullable=True)
     email_institucional = Column(String, unique=True, nullable=False)
     hashed_password = Column(String, nullable=False)
     rol_id = Column(Integer, ForeignKey("roles.id"), nullable=False)

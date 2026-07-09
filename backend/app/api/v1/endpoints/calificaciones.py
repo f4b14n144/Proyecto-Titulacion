@@ -118,13 +118,14 @@ async def preview_calificaciones(
                        "No hay asignaciones docente registradas para el período de este consejo")
             raise HTTPException(status_code=400, detail=detalle)
 
-        resultados = procesar_excel(ruta_tmp, tipo.upper(), asignaciones)
+        resultados, adv_archivo = procesar_excel(ruta_tmp, tipo.upper(), asignaciones)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
     finally:
         os.unlink(ruta_tmp)
 
-    advertencias_globales = [
+    # Avisos del archivo completo (filtro de carrera, sin asignación) + los de cada asignatura
+    advertencias_globales = list(adv_archivo) + [
         adv
         for r in resultados
         for adv in r.get("advertencias", [])
@@ -183,7 +184,7 @@ async def confirmar_calificaciones(
                        "No hay asignaciones registradas para este período")
             raise HTTPException(status_code=400, detail=detalle)
 
-        resultados = procesar_excel(ruta_tmp, tipo.upper(), asignaciones)
+        resultados, _ = procesar_excel(ruta_tmp, tipo.upper(), asignaciones)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
     finally:

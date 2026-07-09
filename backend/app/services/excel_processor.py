@@ -32,6 +32,9 @@ _SINONIMOS: dict[str, list[str]] = {
     "docente":        ["docente", "profesor", "teacher", "nombre docente"],
     "asignatura":     ["asignatura", "materia", "subject", "nombre asignatura"],
     "grupo":          ["grupo", "paralelo", "group", "seccion", "sección"],
+    # Algunos exports traen la carrera del estudiante en su propia columna.
+    # Cuando existe, es la fuente autoritativa para filtrar (ver _filtrar_computacion).
+    "carrera":        ["carrera", "nombre carrera", "carrera del estudiante"],
 }
 
 
@@ -102,16 +105,103 @@ def _extraer_numero_grupo(grupo_raw: str) -> str:
     return str(grupo_raw).strip()
 
 
+# Códigos de sede que aparecen al final de la columna Grupo (no son carreras)
+_SEDES = {"cue", "qui", "gye", "uio"}
+
+
+def _carreras_del_grupo(grupo_raw: Any) -> list[str]:
+    """
+    Extrae las carreras nombradas en la columna Grupo del Excel institucional.
+
+    Formato UPS: "GRUPO - {n} - {CARRERA(S)} - {SEDE}"
+      "GRUPO - 5 - COMPUTACIÓN - CUE"                → ["COMPUTACIÓN"]
+      "GRUPO - 1 - BIOMEDICINA - COMPUTACIÓN - CUE"  → ["BIOMEDICINA", "COMPUTACIÓN"]
+      "GRUPO - 1"                                    → []  (no nombra carrera)
+    """
+    partes = [p.strip() for p in str(grupo_raw).split(" - ")]
+    # Descartar el prefijo "GRUPO" y el número de grupo
+    resto = [p for p in partes[1:] if p and not p.isdigit()]
+    # Descartar el código de sede final
+    return [p for p in resto if _normalizar(p) not in _SEDES]
+
+
+def _es_de_computacion(grupo_raw: Any) -> bool:
+    """
+    True si la fila pertenece a la Carrera de Computación, según la columna Grupo.
+
+    Solo se usa como FALLBACK cuando el Excel no trae columna "Carrera".
+
+    - Nombra COMPUTACIÓN (con o sin tilde, incluso junto a otras carreras) → sí.
+    - No nombra ninguna carrera ("GRUPO - 1") → sí; son materias propias de la
+      carrera (ej. INGENIERÍA DE SOFTWARE, ANÁLISIS Y DISEÑO DE SISTEMAS).
+    - Nombra otras carreras y ninguna es Computación → no.
+    """
+    carreras = _carreras_del_grupo(grupo_raw)
+    if not carreras:
+        return True
+    return any("computacion" in _normalizar(c) for c in carreras)
+
+
+def _filtrar_computacion(
+    df: pd.DataFrame, col_map: dict[str, str | None]
+) -> tuple[pd.DataFrame, list[str]]:
+    """
+    Deja solo las filas de la Carrera de Computación.
+
+    Prioridad:
+      1. Columna "Carrera" si existe → es la fuente autoritativa. La columna
+         "Grupo" NO sirve en ese caso: nombra la carrera *dueña del grupo*, y un
+         estudiante de Computación puede cursar en un grupo de MECATRÓNICA o
+         DERECHO (grupos compartidos). Filtrar por Grupo descartaría esas filas.
+      2. Si no hay columna "Carrera", se infiere desde "Grupo" (_es_de_computacion).
+    """
+    advertencias: list[str] = []
+    antes = len(df)
+
+    if col_map["carrera"]:
+        col_c = col_map["carrera"]
+        # Filas sin carrera declarada se conservan (no hay motivo para descartarlas)
+        es_comp = df[col_c].apply(
+            lambda v: pd.isna(v) or "computacion" in _normalizar(v)
+        )
+        descartadas = sorted(set(df.loc[~es_comp, col_c].dropna().astype(str)))
+        etiqueta = f"columna '{col_c}'"
+    elif col_map["grupo"]:
+        col_g = col_map["grupo"]
+        es_comp = df[col_g].apply(_es_de_computacion)
+        descartadas = sorted({
+            " / ".join(_carreras_del_grupo(g))
+            for g in df.loc[~es_comp, col_g].dropna().unique()
+        })
+        etiqueta = f"columna '{col_g}' (inferido)"
+    else:
+        return df, advertencias
+
+    df = df[es_comp]
+    n_descartadas = antes - len(df)
+    if n_descartadas:
+        advertencias.append(
+            f"Se descartaron {n_descartadas} filas de otras carreras "
+            f"según {etiqueta}: {'; '.join(descartadas)}"
+        )
+    logger.info(
+        f"Filtro de carrera ({etiqueta}): {len(df)} filas de Computación, "
+        f"{n_descartadas} descartadas"
+    )
+    return df, advertencias
+
+
 def procesar_excel(
     ruta_archivo: str,
     tipo: str,  # INTERCICLO | FINAL
     asignaciones_periodo: list[dict],
     # [{"asignatura_id": int, "asignatura_nombre": str, "asignatura_codigo": str,
     #   "usuario_id": int, "grupo": str}]
-) -> list[dict]:
+) -> tuple[list[dict], list[str]]:
     """
-    Lee el Excel y retorna una lista de resultados por asignatura+grupo:
+    Lee el Excel y retorna (resultados, advertencias_globales).
 
+    resultados: una entrada por asignatura+grupo:
     [
       {
         "asignatura_id": int,
@@ -123,6 +213,9 @@ def procesar_excel(
         "advertencias": [str],
       }
     ]
+
+    advertencias_globales: avisos del archivo completo (filas de otras carreras
+    descartadas, asignaturas sin asignación registrada, etc.)
     """
     logger.info(f"Procesando Excel tipo={tipo}: {ruta_archivo}")
     advertencias_globales: list[str] = []
@@ -149,6 +242,7 @@ def procesar_excel(
         "estado":       _detectar_columna(list(df.columns), "estado"),
         "asignatura":   _detectar_columna(list(df.columns), "asignatura"),
         "grupo":        _detectar_columna(list(df.columns), "grupo"),
+        "carrera":      _detectar_columna(list(df.columns), "carrera"),
     }
 
     columnas_presentes = [k for k, v in col_map.items() if v is not None]
@@ -168,6 +262,10 @@ def procesar_excel(
 
     # Eliminar filas completamente vacías
     df = df.dropna(how="all")
+
+    # Filtrar: el Excel institucional puede traer varias carreras de la sede.
+    df, adv_filtro = _filtrar_computacion(df, col_map)
+    advertencias_globales.extend(adv_filtro)
 
     resultados: list[dict] = []
 
@@ -203,7 +301,7 @@ def procesar_excel(
     if advertencias_globales:
         logger.warning(f"Advertencias al procesar Excel: {advertencias_globales}")
 
-    return resultados
+    return resultados, advertencias_globales
 
 
 def _buscar_asignacion(nombre_asig: str, grupo: str, asignaciones: list[dict]) -> dict | None:
@@ -297,6 +395,7 @@ def _construir_resultado(
 ) -> dict:
     return {
         "asignatura_id":       asignacion["asignatura_id"],
+        "asignatura_nombre":   asignacion.get("asignatura_nombre", ""),
         "grupo":               grupo,
         "estudiantes":         estudiantes,
         "total_estudiantes":   len(estudiantes),

@@ -13,6 +13,7 @@ class EstudianteCalificacion(BaseModel):
 
 class ResultadoAsignatura(BaseModel):
     asignatura_id: int
+    asignatura_nombre: str = ""
     grupo: str
     estudiantes: list[EstudianteCalificacion]
     total_estudiantes: int

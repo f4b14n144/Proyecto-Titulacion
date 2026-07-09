@@ -5,6 +5,7 @@ import type { ApiResponse, Rol } from '../../types'
 interface UsuarioRow {
   id: number
   nombre_completo: string
+  titulo?: string | null
   email_institucional: string
   rol_id: number
   activo: boolean
@@ -13,6 +14,7 @@ interface UsuarioRow {
 
 type FormData = {
   nombre_completo: string
+  titulo: string
   email_institucional: string
   password: string
   rol_id: string
@@ -20,6 +22,7 @@ type FormData = {
 
 const formVacio: FormData = {
   nombre_completo: '',
+  titulo: 'Ing.',
   email_institucional: '',
   password: '',
   rol_id: '',
@@ -71,6 +74,7 @@ export default function Usuarios() {
     setEditando(u)
     setForm({
       nombre_completo: u.nombre_completo,
+      titulo: u.titulo ?? '',
       email_institucional: u.email_institucional,
       password: '',
       rol_id: u.rol_id.toString(),
@@ -96,6 +100,7 @@ export default function Usuarios() {
       if (editando) {
         const payload: Record<string, unknown> = {
           nombre_completo: form.nombre_completo,
+          titulo: form.titulo,
           email_institucional: form.email_institucional,
           rol_id: Number(form.rol_id),
         }
@@ -104,6 +109,7 @@ export default function Usuarios() {
       } else {
         await api.post('/usuarios/', {
           nombre_completo: form.nombre_completo,
+          titulo: form.titulo,
           email_institucional: form.email_institucional,
           password: form.password,
           rol_id: Number(form.rol_id),
@@ -214,7 +220,9 @@ export default function Usuarios() {
               <tbody className="divide-y">
                 {usuarios.map((u) => (
                   <tr key={u.id} className={`hover:bg-gray-50 ${!u.activo ? 'opacity-50' : ''}`}>
-                    <td className="px-4 py-3 font-medium text-gray-800">{u.nombre_completo}</td>
+                    <td className="px-4 py-3 font-medium text-gray-800">
+                      {u.titulo ? `${u.titulo} ` : ''}{u.nombre_completo}
+                    </td>
                     <td className="px-4 py-3 text-gray-500">{u.email_institucional}</td>
                     <td className="px-4 py-3">
                       <span className={`px-2 py-0.5 rounded text-xs font-medium ${ROL_COLOR[rolMostrado(u)] ?? 'bg-gray-100 text-gray-600'}`}>
@@ -254,14 +262,26 @@ export default function Usuarios() {
               {editando ? 'Editar usuario' : 'Nuevo usuario'}
             </h2>
             <div className="flex flex-col gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nombre completo</label>
-                <input
-                  type="text"
-                  value={form.nombre_completo}
-                  onChange={(e) => setForm({ ...form, nombre_completo: e.target.value })}
-                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ups-blue"
-                />
+              <div className="flex gap-3">
+                <div className="w-28">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Título</label>
+                  <input
+                    type="text"
+                    value={form.titulo}
+                    onChange={(e) => setForm({ ...form, titulo: e.target.value })}
+                    placeholder="Ing."
+                    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ups-blue"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Nombre completo</label>
+                  <input
+                    type="text"
+                    value={form.nombre_completo}
+                    onChange={(e) => setForm({ ...form, nombre_completo: e.target.value })}
+                    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ups-blue"
+                  />
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Email institucional</label>

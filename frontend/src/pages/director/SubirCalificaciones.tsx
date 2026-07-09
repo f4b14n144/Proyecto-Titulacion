@@ -16,6 +16,7 @@ interface EstudiantePreview {
 
 interface ResultadoPreview {
   asignatura_id: number
+  asignatura_nombre: string
   grupo: string
   estudiantes: EstudiantePreview[]
   total_estudiantes: number
@@ -243,10 +244,12 @@ export default function SubirCalificaciones() {
               <div key={`${r.asignatura_id}-${r.grupo}`} className="bg-white rounded-xl border overflow-hidden">
                 <div className="bg-gray-50 border-b px-4 py-3 flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <span className="bg-ups-blue text-white text-xs font-bold px-2 py-0.5 rounded">
-                      Asig. #{r.asignatura_id}
+                    <span className="font-semibold text-gray-800">
+                      {r.asignatura_nombre || `Asignatura #${r.asignatura_id}`}
                     </span>
-                    <span className="font-medium text-gray-700">Grupo: {r.grupo}</span>
+                    <span className="bg-ups-blue text-white text-xs font-bold px-2 py-0.5 rounded">
+                      Grupo {r.grupo}
+                    </span>
                     <span className="text-gray-400 text-xs">{r.total_estudiantes} estudiantes</span>
                   </div>
                   <span className="text-xs text-gray-400">Cols: {r.columnas_detectadas.join(', ')}</span>
