@@ -60,12 +60,31 @@ def generar_docx(db: Session, informe: Informe) -> str:
     return nombre_archivo
 
 
+def _aplanar_contexto(contenido: dict) -> dict:
+    """
+    Prepara el contexto para Jinja2.
+
+    Las plantillas usan marcadores planos (`{{ agenda }}`), pero el contenido se
+    guarda anidado bajo `secciones` / `secciones_direccion`. Sin este aplanado,
+    los informes salían con los títulos pero SIN texto.
+
+    Las secciones de dirección se exponen con el prefijo `dir_` para poder
+    imprimirlas junto al aporte del jefe de área.
+    """
+    contexto = dict(contenido)
+    for campo, valor in (contenido.get("secciones") or {}).items():
+        contexto.setdefault(campo, valor)
+    for campo, valor in (contenido.get("secciones_direccion") or {}).items():
+        contexto[f"dir_{campo}"] = valor
+    return contexto
+
+
 def _generar_desde_plantilla(
     plantilla_ruta: Path, contexto: dict, ruta_salida: Path
 ) -> None:
     """Renderiza la plantilla Jinja2 .docx con el contexto dado."""
     doc = DocxTemplate(str(plantilla_ruta))
-    doc.render(contexto)
+    doc.render(_aplanar_contexto(contexto))
     doc.save(str(ruta_salida))
 
 

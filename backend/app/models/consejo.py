@@ -18,3 +18,6 @@ class ConsejoCarrera(Base):
     calificaciones = relationship("Calificacion", back_populates="consejo")
     informes = relationship("Informe", back_populates="consejo")
     notificaciones = relationship("Notificacion", back_populates="consejo")
+    contenido_direccion = relationship(
+        "ContenidoConsejo", back_populates="consejo", uselist=False
+    )

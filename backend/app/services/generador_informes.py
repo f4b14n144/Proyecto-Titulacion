@@ -11,7 +11,9 @@ Cada función:
 from datetime import datetime, timezone
 from loguru import logger
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 
+from app.models.contenido_consejo import ContenidoConsejo
 from app.models.informe import Informe
 from app.models.calificacion import Calificacion
 from app.models.checklist_avac import ChecklistAVAC
@@ -92,60 +94,140 @@ def _respuesta_docente(db: Session, docente_id: int, consejo_id: int) -> str:
 
 
 # ──────────────────────────────────────────────────────────────────
-# Informe 1 — Centro Docente
+# Informe 1 — Centro Docente (contenido de dirección + aporte del jefe)
 # ──────────────────────────────────────────────────────────────────
 
-def generar_informe_1(db: Session, consejo_id: int, area_id: int) -> Informe:
-    """
-    Informe 1 es un formulario manual — crea la estructura vacía
-    para que el director la complete desde el panel.
-    """
-    consejo = db.query(ConsejoCarrera).filter(ConsejoCarrera.id == consejo_id).first()
-    periodo = db.query(PeriodoAcademico).filter(PeriodoAcademico.id == consejo.periodo_id).first()
+# Secciones que escribe la DIRECTORA (comunes a todas las áreas del consejo)
+SECCIONES_DIRECCION: list[str] = [
+    "agenda",
+    "designaciones",
+    "observaciones_curriculares",
+    "resultados_encuestas",
+    "resoluciones",
+    "observaciones_adicionales",
+]
 
-    # Designaciones de jefes de área: se llenan automáticamente con las
-    # jefaturas asignadas en el sistema para el período del consejo.
+
+def _designaciones_jefes(db: Session, periodo_id: int) -> str:
+    """Texto auto-llenado con las jefaturas de área del período."""
     from app.models.jefatura import JefaturaArea
     filas = (
         db.query(JefaturaArea, Area, Usuario)
         .join(Area, JefaturaArea.area_id == Area.id)
         .join(Usuario, JefaturaArea.usuario_id == Usuario.id)
-        .filter(JefaturaArea.periodo_id == consejo.periodo_id)
+        .filter(JefaturaArea.periodo_id == periodo_id)
         .order_by(Area.nombre)
         .all()
     )
-    designaciones = "\n".join(
+    return "\n".join(
         f"• {area.nombre}: {usuario.nombre_completo}" for _, area, usuario in filas
     ) or "No hay jefes de área asignados para este período."
 
-    # Nombre del director de carrera: se llena automáticamente.
+
+def _nombre_director(db: Session) -> str:
     from app.models.rol import Rol
     director = (
         db.query(Usuario).join(Rol, Usuario.rol_id == Rol.id)
-        .filter(Rol.nombre == "DIRECTOR_CARRERA", Usuario.activo == True)
+        .filter(Rol.nombre == "DIRECTOR_CARRERA", Usuario.activo.is_(True))
         .first()
     )
-    nombre_director = director.nombre_completo if director else ""
+    return director.nombre_completo if director else ""
+
+
+def obtener_o_crear_contenido_direccion(db: Session, consejo_id: int) -> ContenidoConsejo:
+    """
+    Contenido del Informe 1 escrito por la dirección, único por consejo.
+    Al crearlo se auto-llenan las designaciones de jefes y el nombre del director.
+    """
+    contenido = (
+        db.query(ContenidoConsejo)
+        .filter(ContenidoConsejo.consejo_id == consejo_id)
+        .first()
+    )
+    if contenido:
+        return contenido
+
+    consejo = db.query(ConsejoCarrera).filter(ConsejoCarrera.id == consejo_id).first()
+    if consejo is None:
+        raise ValueError(f"Consejo {consejo_id} no existe")
+
+    secciones = {campo: "" for campo in SECCIONES_DIRECCION}
+    secciones["designaciones"] = _designaciones_jefes(db, consejo.periodo_id)
+
+    contenido = ContenidoConsejo(
+        consejo_id=consejo_id,
+        secciones=secciones,
+        nombre_director=_nombre_director(db),
+    )
+    db.add(contenido)
+    db.commit()
+    logger.info(f"Contenido de dirección creado para el consejo {consejo_id}")
+    return contenido
+
+
+def _jefe_del_area(db: Session, area_id: int, periodo_id: int) -> Usuario | None:
+    from app.models.jefatura import JefaturaArea
+    jefatura = (
+        db.query(JefaturaArea)
+        .filter(JefaturaArea.area_id == area_id, JefaturaArea.periodo_id == periodo_id)
+        .first()
+    )
+    if jefatura is None:
+        return None
+    return db.query(Usuario).filter(Usuario.id == jefatura.usuario_id).first()
+
+
+def _datos_jefe(db: Session, area_id: int, periodo_id: int) -> dict:
+    """Nombre y título del jefe del área — van en la carátula y en las firmas."""
+    jefe = _jefe_del_area(db, area_id, periodo_id)
+    return {
+        "jefe_nombre": jefe.nombre_completo if jefe else "",
+        "jefe_titulo": (jefe.titulo or "") if jefe else "",
+    }
+
+
+def generar_informe_1(db: Session, consejo_id: int, area_id: int) -> Informe:
+    """
+    Informe 1 del ÁREA indicada.
+
+    Hereda (en solo lectura) el contenido que escribió la dirección para el
+    consejo y conserva las secciones propias que haya escrito el jefe de área.
+    """
+    consejo = db.query(ConsejoCarrera).filter(ConsejoCarrera.id == consejo_id).first()
+    periodo = db.query(PeriodoAcademico).filter(PeriodoAcademico.id == consejo.periodo_id).first()
+    area = db.query(Area).filter(Area.id == area_id).first()
+
+    direccion = obtener_o_crear_contenido_direccion(db, consejo_id)
+    jefe = _jefe_del_area(db, area_id, consejo.periodo_id)
 
     informe = _obtener_o_crear_informe(db, consejo_id, area_id, 1)
+
+    # No pisar lo que el jefe ya escribió
+    previo = informe.contenido_json or {}
+    secciones_jefe = dict(previo.get("secciones", {}))
+    for campo in SECCIONES_DIRECCION:
+        secciones_jefe.setdefault(campo, "")
+
     informe.contenido_json = {
         "periodo_nombre": periodo.nombre if periodo else "",
         "fecha_consejo": str(consejo.fecha_consejo) if consejo else "",
         "fecha_informe": str(datetime.now(timezone.utc).date()),
-        "secciones": {
-            "agenda": "",
-            "designaciones": designaciones,
-            "observaciones_curriculares": "",
-            "resultados_encuestas": "",
-            "resoluciones": "",
-            "observaciones_adicionales": "",
-        },
-        "nombre_director": nombre_director,
-        "firma_director": "",
+        "area_nombre": area.nombre if area else "",
+        "jefe_nombre": jefe.nombre_completo if jefe else "",
+        "jefe_titulo": (jefe.titulo or "") if jefe else "",
+        # Copia de solo lectura de lo que escribió la dirección
+        "secciones_direccion": dict(direccion.secciones or {}),
+        # Aporte propio del jefe de área
+        "secciones": secciones_jefe,
+        "nombre_director": direccion.nombre_director or "",
     }
-    informe.estado = "BORRADOR"
+    flag_modified(informe, "contenido_json")
+    informe.estado = informe.estado or "BORRADOR"
     db.commit()
-    logger.info(f"Informe 1 creado — consejo {consejo_id} área {area_id} — {len(filas)} jefes, director: {nombre_director}")
+    logger.info(
+        f"Informe 1 — consejo {consejo_id}, área {area_id} "
+        f"({area.nombre if area else '?'}), jefe: {jefe.nombre_completo if jefe else 'sin jefe'}"
+    )
     return informe
 
 
@@ -203,7 +285,7 @@ def generar_informe_2(db: Session, consejo_id: int, area_id: int) -> Informe:
     informe.contenido_json = {
         "periodo_nombre": periodo.nombre if periodo else "",
         "area_nombre": area.nombre if area else "",
-        "jefe_nombre": "",
+        **_datos_jefe(db, area_id, consejo.periodo_id),
         "checklists": checklists_data,
         "pct_cumplimiento": pct_cumplimiento,
         "analisis_area": analisis_area,
@@ -293,7 +375,7 @@ def generar_informe_3(db: Session, consejo_id: int, area_id: int) -> Informe:
     informe.contenido_json = {
         "periodo_nombre": periodo.nombre if periodo else "",
         "area_nombre": area.nombre if area else "",
-        "jefe_nombre": "",
+        **_datos_jefe(db, area_id, consejo.periodo_id),
         "visitas": visitas_data,
         "calificaciones_interciclo": calificaciones_data,
         "secciones": {},
@@ -389,7 +471,7 @@ def generar_informe_4(db: Session, consejo_id: int, area_id: int) -> Informe:
     informe.contenido_json = {
         "periodo_nombre": periodo.nombre if periodo else "",
         "area_nombre": area.nombre if area else "",
-        "jefe_nombre": "",
+        **_datos_jefe(db, area_id, consejo.periodo_id),
         "calificaciones_finales": calificaciones_data,
         **consolidado,
         "secciones": {},

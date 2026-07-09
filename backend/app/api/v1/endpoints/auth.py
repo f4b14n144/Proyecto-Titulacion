@@ -54,13 +54,36 @@ def refresh(payload: RefreshRequest, db: Session = Depends(get_db)):
 
 
 @router.get("/me", response_model=MeResponse)
-def me(current_user: Usuario = Depends(get_current_user)):
+def me(
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    # Área que dirige (si tiene jefatura); el panel del jefe la necesita para
+    # generar los informes de su área.
+    from app.models.area import Area
+    from app.models.jefatura import JefaturaArea
+
+    area_id = None
+    area_nombre = None
+    jefatura = (
+        db.query(JefaturaArea)
+        .filter(JefaturaArea.usuario_id == current_user.id)
+        .first()
+    )
+    if jefatura:
+        area = db.query(Area).filter(Area.id == jefatura.area_id).first()
+        area_id = jefatura.area_id
+        area_nombre = area.nombre if area else None
+
     return MeResponse(
         id=current_user.id,
         nombre_completo=current_user.nombre_completo,
         email_institucional=current_user.email_institucional,
         rol=getattr(current_user, "rol_efectivo", current_user.rol.nombre),
         activo=current_user.activo,
+        titulo=current_user.titulo,
+        area_id=area_id,
+        area_nombre=area_nombre,
     )
 
 

@@ -215,25 +215,33 @@ def crear_informe_1():
     # Metadatos
     _meta(doc, [
         ("Período académico:", "{{ periodo_nombre }}"),
+        ("Área:", "{{ area_nombre }}"),
+        ("Jefe de Área:", "{{ jefe_titulo }} {{ jefe_nombre }}"),
         ("Fecha del Consejo:", "{{ fecha_consejo }}"),
         ("Fecha del informe:", "{{ fecha_informe }}"),
     ])
 
-    # Secciones del formulario
-    for titulo, marcador in [
-        ("1. Agenda tratada en la reunión", "{{ agenda }}"),
-        ("2. Designaciones de Jefes de Área", "{{ designaciones }}"),
-        ("3. Observaciones curriculares de docentes", "{{ observaciones_curriculares }}"),
-        ("4. Resultados de encuestas estudiantiles", "{{ resultados_encuestas }}"),
-        ("5. Resoluciones y compromisos", "{{ resoluciones }}"),
-        ("6. Observaciones adicionales", "{{ observaciones_adicionales }}"),
+    # Cada sección lleva: lo que escribió la dirección (común a todas las áreas)
+    # y debajo el aporte propio del jefe de área.
+    for titulo, campo in [
+        ("1. Agenda tratada en la reunión", "agenda"),
+        ("2. Designaciones de Jefes de Área", "designaciones"),
+        ("3. Observaciones curriculares de docentes", "observaciones_curriculares"),
+        ("4. Resultados de encuestas estudiantiles", "resultados_encuestas"),
+        ("5. Resoluciones y compromisos", "resoluciones"),
+        ("6. Observaciones adicionales", "observaciones_adicionales"),
     ]:
         doc.add_heading(titulo, level=2)
-        doc.add_paragraph(marcador)
+        doc.add_paragraph(f"{{{{ dir_{campo} }}}}")
+        doc.add_paragraph(
+            f"{{%p if {campo} %}}"
+        )
+        doc.add_heading("Aporte del Área", level=3)
+        doc.add_paragraph(f"{{{{ {campo} }}}}")
+        doc.add_paragraph("{%p endif %}")
 
     _firmas(doc, [
-        ("Director/a de Carrera", "{{ nombre_director }}"),
-        ("Secretaria", ""),
+        ("Jefe de Área", "{{ jefe_titulo }} {{ jefe_nombre }}"),
     ])
 
     ruta = DIR / "informe_1_plantilla.docx"
@@ -287,8 +295,7 @@ def crear_informe_2():
     doc.add_paragraph("{{ analisis_area }}")
 
     _firmas(doc, [
-        ("Jefe de Área", ""),
-        ("Director/a de Carrera", ""),
+        ("Jefe de Área", "{{ jefe_titulo }} {{ jefe_nombre }}"),
     ])
 
     ruta = DIR / "informe_2_plantilla.docx"
@@ -349,8 +356,7 @@ def crear_informe_3():
     doc.add_paragraph("{% endfor %}")
 
     _firmas(doc, [
-        ("Jefe de Área", ""),
-        ("Director/a de Carrera", ""),
+        ("Jefe de Área", "{{ jefe_titulo }} {{ jefe_nombre }}"),
     ])
 
     ruta = DIR / "informe_3_plantilla.docx"
@@ -402,8 +408,7 @@ def crear_informe_4():
     doc.add_paragraph("{{ acciones_generales_area }}")
 
     _firmas(doc, [
-        ("Jefe de Área", ""),
-        ("Director/a de Carrera", ""),
+        ("Jefe de Área", "{{ jefe_titulo }} {{ jefe_nombre }}"),
     ])
 
     ruta = DIR / "informe_4_plantilla.docx"

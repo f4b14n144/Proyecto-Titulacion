@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import api from '../../services/api'
+import { useAuth } from '../../hooks/useAuth'
 import { descargarInforme } from '../../services/informes.service'
 import type { ApiResponse } from '../../types'
 
@@ -22,6 +23,7 @@ const SUB_ANALISIS = [
 ]
 
 export default function Informe4() {
+  const { user } = useAuth()
   const [consejos, setConsejos] = useState<Consejo[]>([])
   const [periodos, setPeriodos] = useState<Periodo[]>([])
   const [consejoId, setConsejoId] = useState('')
@@ -66,7 +68,7 @@ export default function Informe4() {
   const generarBorrador = async () => {
     setGenerando(true); setMsg(''); setError('')
     try {
-      await api.post('/informes/generar-borrador', { consejo_id: Number(consejoId), area_id: 0, tipo_informe: 4 })
+      await api.post('/informes/generar-borrador', { consejo_id: Number(consejoId), area_id: user?.area_id, tipo_informe: 4 })
       setMsg('Generando con IA… puede tardar 1-2 minutos. Recarga en unos momentos.')
     } catch { setError('Error al iniciar la generación.') } finally { setGenerando(false) }
   }

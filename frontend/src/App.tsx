@@ -16,6 +16,7 @@ import SubirCalificaciones from './pages/director/SubirCalificaciones'
 import Informe1 from './pages/director/Informe1'
 import VerInformes from './pages/director/VerInformes'
 import JefeDashboard from './pages/jefe_area/Dashboard'
+import Informe1Jefe from './pages/jefe_area/Informe1'
 import Informe2 from './pages/jefe_area/Informe2'
 import Informe3 from './pages/jefe_area/Informe3'
 import Informe4 from './pages/jefe_area/Informe4'
@@ -80,7 +81,7 @@ export default function App() {
               <Routes>
                 <Route index element={<JefeDashboard />} />
                 <Route path="calificaciones" element={<SubirCalificaciones />} />
-                <Route path="informe1" element={<Informe1 />} />
+                <Route path="informe1" element={<Informe1Jefe />} />
                 <Route path="informe2" element={<Informe2 />} />
                 <Route path="informe3" element={<Informe3 />} />
                 <Route path="informe4" element={<Informe4 />} />

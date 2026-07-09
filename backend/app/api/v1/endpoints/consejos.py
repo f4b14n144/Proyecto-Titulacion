@@ -1,6 +1,8 @@
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 from app.core.deps import get_db, require_role
 from app.models.consejo import ConsejoCarrera
 from app.models.periodo import PeriodoAcademico
@@ -96,3 +98,63 @@ def eliminar_consejo(
     db.delete(consejo)
     db.commit()
     return {"data": None, "message": "Consejo eliminado", "success": True}
+
+
+# ──────────────────────────────────────────────────────────────────
+# Contenido del Informe 1 escrito por la DIRECCIÓN
+# Es común al consejo y se propaga en solo lectura al Informe 1 de cada área.
+# ──────────────────────────────────────────────────────────────────
+
+class ContenidoDireccionUpdate(BaseModel):
+    secciones: dict[str, str]
+    nombre_director: Optional[str] = None
+
+
+def _contenido_out(contenido) -> dict:
+    return {
+        "consejo_id": contenido.consejo_id,
+        "secciones": contenido.secciones or {},
+        "nombre_director": contenido.nombre_director or "",
+    }
+
+
+@router.get("/{consejo_id}/contenido-direccion", response_model=dict)
+def obtener_contenido_direccion(
+    consejo_id: int,
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(_director_o_jefe),
+):
+    """Lo lee la directora (para editar) y los jefes (en solo lectura)."""
+    from app.services.generador_informes import obtener_o_crear_contenido_direccion
+
+    if not db.query(ConsejoCarrera).filter(ConsejoCarrera.id == consejo_id).first():
+        raise HTTPException(status_code=404, detail="Consejo no encontrado")
+
+    contenido = obtener_o_crear_contenido_direccion(db, consejo_id)
+    return {"data": _contenido_out(contenido), "message": "OK", "success": True}
+
+
+@router.put("/{consejo_id}/contenido-direccion", response_model=dict)
+def actualizar_contenido_direccion(
+    consejo_id: int,
+    payload: ContenidoDireccionUpdate,
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(_solo_director),
+):
+    """Solo la directora escribe aquí. Los jefes no pueden modificarlo."""
+    from app.services.generador_informes import obtener_o_crear_contenido_direccion
+
+    if not db.query(ConsejoCarrera).filter(ConsejoCarrera.id == consejo_id).first():
+        raise HTTPException(status_code=404, detail="Consejo no encontrado")
+
+    contenido = obtener_o_crear_contenido_direccion(db, consejo_id)
+    contenido.secciones = {**(contenido.secciones or {}), **payload.secciones}
+    if payload.nombre_director is not None:
+        contenido.nombre_director = payload.nombre_director
+    flag_modified(contenido, "secciones")
+    db.commit()
+    return {
+        "data": _contenido_out(contenido),
+        "message": "Contenido de dirección actualizado",
+        "success": True,
+    }

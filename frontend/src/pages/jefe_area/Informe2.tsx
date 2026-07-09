@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import api from '../../services/api'
+import { useAuth } from '../../hooks/useAuth'
 import { descargarInforme } from '../../services/informes.service'
 import type { ApiResponse } from '../../types'
 
@@ -28,6 +29,7 @@ const PARAMS_BOOL = [
 type ChecklistRow = Record<string, boolean | string>
 
 export default function Informe2() {
+  const { user } = useAuth()
   const [consejos, setConsejos] = useState<Consejo[]>([])
   const [periodos, setPeriodos] = useState<Periodo[]>([])
   const [asignaciones, setAsignaciones] = useState<Asignacion[]>([])
@@ -102,7 +104,7 @@ export default function Informe2() {
 
       let informeActual = informe
       if (!informeActual) {
-        await api.post('/informes/generar-borrador', { consejo_id: Number(consejoId), area_id: 0, tipo_informe: 2 })
+        await api.post('/informes/generar-borrador', { consejo_id: Number(consejoId), area_id: user?.area_id, tipo_informe: 2 })
         await new Promise((r) => setTimeout(r, 1500))
         const { data } = await api.get<ApiResponse<Informe[]>>('/informes/', { params: { consejo_id: consejoId } })
         informeActual = data.data.find((i) => i.tipo_informe === 2) ?? null

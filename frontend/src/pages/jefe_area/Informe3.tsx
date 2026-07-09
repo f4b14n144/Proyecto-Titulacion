@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import api from '../../services/api'
+import { useAuth } from '../../hooks/useAuth'
 import { descargarInforme } from '../../services/informes.service'
 import type { ApiResponse } from '../../types'
 
@@ -22,6 +23,7 @@ const PARAMS_VISITA = [
 type VisitaRow = Record<string, boolean | string>
 
 export default function Informe3() {
+  const { user } = useAuth()
   const [consejos, setConsejos] = useState<Consejo[]>([])
   const [periodos, setPeriodos] = useState<Periodo[]>([])
   const [asignaciones, setAsignaciones] = useState<Asignacion[]>([])
@@ -118,7 +120,7 @@ export default function Informe3() {
     try {
       let inf = informe
       if (!inf) {
-        await api.post('/informes/generar-borrador', { consejo_id: Number(consejoId), area_id: 0, tipo_informe: 3 })
+        await api.post('/informes/generar-borrador', { consejo_id: Number(consejoId), area_id: user?.area_id, tipo_informe: 3 })
         await new Promise((r) => setTimeout(r, 1500))
         const { data } = await api.get<ApiResponse<Informe[]>>('/informes/', { params: { consejo_id: consejoId } })
         inf = data.data.find((i) => i.tipo_informe === 3) ?? null

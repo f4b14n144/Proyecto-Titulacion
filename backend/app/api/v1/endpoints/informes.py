@@ -18,21 +18,22 @@ _solo_director = require_role("DIRECTOR_CARRERA")
 _director_o_jefe = require_role("DIRECTOR_CARRERA", "JEFE_AREA")
 
 
+def _areas_del_jefe(db: Session, usuario_id: int) -> list[int]:
+    from app.models.jefatura import JefaturaArea
+    return [
+        a_id for (a_id,) in
+        db.query(JefaturaArea.area_id).filter(JefaturaArea.usuario_id == usuario_id).all()
+    ]
+
+
 def _validar_area_jefe(db: Session, usuario: Usuario, area_id: int, tipo_informe: int) -> None:
     """
-    Un jefe solo puede generar informes por área (2,3,4) de SU área.
-    El Informe 1 (Centro Docente) lo pueden generar director o jefe sin restricción de área.
+    Un jefe solo puede generar informes de SU área — incluido el Informe 1, que
+    ahora existe por área (hereda el contenido de dirección y el jefe añade lo suyo).
     """
     if getattr(usuario, "rol_efectivo", usuario.rol.nombre) != "JEFE_AREA":
         return
-    if tipo_informe == 1:
-        return
-    from app.models.jefatura import JefaturaArea
-    es_suya = db.query(JefaturaArea).filter(
-        JefaturaArea.usuario_id == usuario.id,
-        JefaturaArea.area_id == area_id,
-    ).first()
-    if not es_suya:
+    if area_id not in _areas_del_jefe(db, usuario.id):
         raise HTTPException(status_code=403, detail="Solo puedes generar informes de tu área")
 
 
@@ -46,16 +47,32 @@ class InformeOut(BaseModel):
     contenido_json: Optional[Any]
     ruta_docx: Optional[str]
     version: int
+    # Derivados (para listar y filtrar en el panel de la directora)
+    area_nombre: Optional[str] = None
+    jefe_id: Optional[int] = None
+    jefe_nombre: Optional[str] = None
 
 
 class SeccionesUpdate(BaseModel):
     secciones: dict[str, str]
 
 
+def _mapa_area_jefe(db: Session) -> dict[int, Usuario]:
+    """area_id → jefe de esa área (según su jefatura vigente)."""
+    from app.models.jefatura import JefaturaArea
+    filas = (
+        db.query(JefaturaArea.area_id, Usuario)
+        .join(Usuario, JefaturaArea.usuario_id == Usuario.id)
+        .all()
+    )
+    return {area_id: jefe for area_id, jefe in filas}
+
+
 @router.get("/", response_model=dict)
 def listar_informes(
     consejo_id: Optional[int] = None,
     area_id: Optional[int] = None,
+    jefe_id: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
@@ -64,17 +81,32 @@ def listar_informes(
         q = q.filter(Informe.consejo_id == consejo_id)
     if area_id:
         q = q.filter(Informe.area_id == area_id)
+    if jefe_id:
+        # Filtrar por jefe = filtrar por las áreas que ese jefe dirige
+        q = q.filter(Informe.area_id.in_(_areas_del_jefe(db, jefe_id) or [-1]))
 
-    # Si es JEFE_AREA, solo ve los informes de SU(S) área(s) + el Informe 1 (compartido)
+    # Un JEFE_AREA solo ve los informes de SU(S) área(s) — el Informe 1 ya es por área
     if getattr(current_user, "rol_efectivo", current_user.rol.nombre) == "JEFE_AREA":
-        from sqlalchemy import or_
-        from app.models.jefatura import JefaturaArea
-        areas_jefe = [a_id for (a_id,) in
-                      db.query(JefaturaArea.area_id).filter(JefaturaArea.usuario_id == current_user.id).all()]
-        q = q.filter(or_(Informe.area_id.in_(areas_jefe or [-1]), Informe.tipo_informe == 1))
+        q = q.filter(Informe.area_id.in_(_areas_del_jefe(db, current_user.id) or [-1]))
 
-    informes = q.all()
-    return {"data": [InformeOut.model_validate(i) for i in informes], "message": "OK", "success": True}
+    # Orden estable: primero por tipo (1,2,3,4) y luego por área
+    informes = q.order_by(Informe.tipo_informe, Informe.area_id).all()
+
+    from app.models.area import Area
+    areas = {a.id: a.nombre for a in db.query(Area).all()}
+    jefes = _mapa_area_jefe(db)
+
+    data = []
+    for i in informes:
+        out = InformeOut.model_validate(i)
+        out.area_nombre = areas.get(i.area_id)
+        jefe = jefes.get(i.area_id)
+        if jefe:
+            out.jefe_id = jefe.id
+            out.jefe_nombre = jefe.nombre_completo
+        data.append(out)
+
+    return {"data": data, "message": "OK", "success": True}
 
 
 @router.get("/{informe_id}", response_model=dict)

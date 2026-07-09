@@ -9,7 +9,8 @@ import {
 } from 'lucide-react'
 
 interface Periodo { id: number; nombre: string; activo: boolean }
-interface Informe { id: number; estado: string }
+interface Informe { id: number; estado: string; jefe_id?: number | null }
+interface AreaItem { id: number }
 
 const ACCESOS: { to: string; label: string; icon: LucideIcon }[] = [
   { to: '/director/usuarios', label: 'Usuarios', icon: Users },
@@ -27,17 +28,25 @@ export default function DirectorDashboard() {
   const { user } = useAuth()
   const [periodoActivo, setPeriodoActivo] = useState<string>('—')
   const [generados, setGenerados] = useState(0)
-  const [pendientes, setPendientes] = useState(0)
+  // Jefes de área que ya generaron al menos un informe, sobre el total de áreas
+  const [jefesConInforme, setJefesConInforme] = useState(0)
+  const [totalAreas, setTotalAreas] = useState(0)
 
   useEffect(() => {
     api.get<ApiResponse<Periodo | null>>('/periodos/activo')
       .then((r) => { if (r.data.data) setPeriodoActivo(r.data.data.nombre) })
       .catch(() => {})
-    api.get<ApiResponse<Informe[]>>('/informes/')
-      .then((r) => {
-        const lista = r.data.data
+
+    Promise.all([
+      api.get<ApiResponse<Informe[]>>('/informes/'),
+      api.get<ApiResponse<AreaItem[]>>('/areas/'),
+    ])
+      .then(([iRes, aRes]) => {
+        const lista = iRes.data.data
         setGenerados(lista.length)
-        setPendientes(lista.filter((i) => i.estado !== 'APROBADO').length)
+        const jefes = new Set(lista.map((i) => i.jefe_id).filter(Boolean))
+        setJefesConInforme(jefes.size)
+        setTotalAreas(aRes.data.data.length)
       })
       .catch(() => {})
   }, [])
@@ -52,7 +61,10 @@ export default function DirectorDashboard() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <StatCard label="Período activo" value={periodoActivo} />
         <StatCard label="Informes generados" value={String(generados)} />
-        <StatCard label="Informes pendientes" value={String(pendientes)} />
+        <StatCard
+          label="Jefes de área que han generado informes"
+          value={`${jefesConInforme} de ${totalAreas}`}
+        />
       </div>
 
       <div className="mt-8">

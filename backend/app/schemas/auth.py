@@ -1,3 +1,4 @@
+from typing import Optional
 from pydantic import BaseModel, ConfigDict
 
 
@@ -26,3 +27,8 @@ class MeResponse(BaseModel):
     email_institucional: str
     rol: str
     activo: bool
+    titulo: Optional[str] = None
+    # Área que dirige, si es jefe de área. Los paneles del jefe la usan para
+    # generar sus informes (antes mandaban area_id=0, que daba 403).
+    area_id: Optional[int] = None
+    area_nombre: Optional[str] = None

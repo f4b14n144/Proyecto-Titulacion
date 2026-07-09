@@ -15,6 +15,9 @@ interface Informe {
   contenido_json?: Record<string, unknown> | null
   ruta_docx: string | null
   version: number
+  area_nombre?: string | null
+  jefe_id?: number | null
+  jefe_nombre?: string | null
 }
 interface Consejo { id: number; periodo_id: number; fecha_consejo: string }
 interface Periodo { id: number; nombre: string }
@@ -43,14 +46,19 @@ export default function VerInformes() {
   const [preview, setPreview] = useState<Informe | null>(null)
   const [cargandoPreview, setCargandoPreview] = useState(false)
   const [previewError, setPreviewError] = useState('')
+  const [filtroArea, setFiltroArea] = useState('')
+  const [filtroJefe, setFiltroJefe] = useState('')
   const docxRef = useRef<HTMLDivElement>(null)
 
   const cargar = async () => {
     setCargando(true)
     setError('')
     try {
+      const params: Record<string, string> = {}
+      if (filtroArea) params.area_id = filtroArea
+      if (filtroJefe) params.jefe_id = filtroJefe
       const [iRes, aRes, cRes, pRes] = await Promise.all([
-        api.get<ApiResponse<Informe[]>>('/informes/'),
+        api.get<ApiResponse<Informe[]>>('/informes/', { params }),
         api.get<ApiResponse<Area[]>>('/areas/'),
         api.get<ApiResponse<Consejo[]>>('/consejos/'),
         api.get<ApiResponse<Periodo[]>>('/periodos/'),
@@ -66,7 +74,16 @@ export default function VerInformes() {
     }
   }
 
-  useEffect(() => { cargar() }, [])
+  useEffect(() => { cargar() }, [filtroArea, filtroJefe])
+
+  /** Jefes disponibles: se derivan de los informes ya cargados (área → jefe). */
+  const [jefes, setJefes] = useState<{ id: number; nombre: string }[]>([])
+  useEffect(() => {
+    if (filtroArea || filtroJefe) return  // no recalcular con la lista filtrada
+    const mapa = new Map<number, string>()
+    informes.forEach((i) => { if (i.jefe_id && i.jefe_nombre) mapa.set(i.jefe_id, i.jefe_nombre) })
+    setJefes([...mapa].map(([id, nombre]) => ({ id, nombre })).sort((a, b) => a.nombre.localeCompare(b.nombre)))
+  }, [informes, filtroArea, filtroJefe])
 
   const nombreArea = (id: number) => areas.find((a) => a.id === id)?.nombre ?? `Área ${id}`
   const periodoDeConsejo = (cid: number) => {
@@ -131,6 +148,27 @@ export default function VerInformes() {
         <button onClick={cargar} className="text-sm text-ups-blue hover:underline">↻ Actualizar</button>
       </div>
 
+      {/* Filtros: por área o por jefe de área */}
+      <div className="flex flex-wrap gap-3 mb-5">
+        <select value={filtroArea} onChange={(e) => { setFiltroArea(e.target.value); setFiltroJefe('') }}
+          className="border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ups-blue">
+          <option value="">Todas las áreas</option>
+          {areas.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}
+        </select>
+        <select value={filtroJefe} onChange={(e) => { setFiltroJefe(e.target.value); setFiltroArea('') }}
+          className="border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ups-blue">
+          <option value="">Todos los jefes de área</option>
+          {jefes.map((j) => <option key={j.id} value={j.id}>{j.nombre}</option>)}
+        </select>
+        {(filtroArea || filtroJefe) && (
+          <button onClick={() => { setFiltroArea(''); setFiltroJefe('') }}
+            className="text-sm text-gray-500 hover:text-gray-700 hover:underline">
+            Limpiar filtros
+          </button>
+        )}
+        <span className="text-sm text-gray-400 self-center">{informes.length} informe(s)</span>
+      </div>
+
       {error && <div className="bg-red-50 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm">{error}</div>}
 
       {cargando ? (
@@ -149,6 +187,7 @@ export default function VerInformes() {
               <tr>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Informe</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Área</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">Jefe de Área</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Período</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Estado</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Versión</th>
@@ -159,7 +198,8 @@ export default function VerInformes() {
               {informes.map((inf) => (
                 <tr key={inf.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3 font-medium text-gray-800">{TIPO_LABEL[inf.tipo_informe] ?? `Informe ${inf.tipo_informe}`}</td>
-                  <td className="px-4 py-3 text-gray-600">{nombreArea(inf.area_id)}</td>
+                  <td className="px-4 py-3 text-gray-600">{inf.area_nombre ?? nombreArea(inf.area_id)}</td>
+                  <td className="px-4 py-3 text-gray-500">{inf.jefe_nombre ?? '—'}</td>
                   <td className="px-4 py-3 text-gray-500">{periodoDeConsejo(inf.consejo_id)}</td>
                   <td className="px-4 py-3">
                     <span className={`px-2 py-0.5 rounded text-xs font-medium ${ESTADO_COLOR[inf.estado] ?? 'bg-gray-100 text-gray-500'}`}>
