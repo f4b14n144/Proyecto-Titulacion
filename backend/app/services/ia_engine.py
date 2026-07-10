@@ -373,3 +373,127 @@ Acciones estratégicas aplicables a todo el equipo docente del área. Español f
         "analisis_consolidado_area": consolidado,
         "acciones_generales_area": acciones_generales,
     }
+
+
+# ──────────────────────────────────────────────────────────────────
+# Prompts — Informe 2 (Revisión AVAC)
+# ──────────────────────────────────────────────────────────────────
+
+# Etiqueta legible de cada parámetro del checklist del aula virtual
+PARAMETROS_AVAC: dict[str, str] = {
+    "silabo_cargado": "Sílabo cargado",
+    "registro_avance": "Registro de avance del sílabo",
+    "guia_practicas": "Guía de componente práctico",
+    "consejeria_academica": "Enlace de consejería académica",
+    "recursos_derechos_autor": "Recursos con derechos de autor",
+    "libros_digitales": "Libros digitales de biblioteca",
+    "seccion_practicas": "Sección PRÁCTICAS",
+    "guias_componente": "Guías de cada componente práctico",
+    "actividades_con_rubrica": "Actividades calificadas con rúbrica",
+    "seccion_investigativas": "Sección INVESTIGATIVAS",
+    "actividad_investigacion": "Actividad para fomentar la investigación",
+    "proyecto_integrador": "Proyecto integrador de materias",
+}
+
+
+def sugerir_acciones_avac(
+    docente: str,
+    asignatura: str,
+    grupo: str,
+    checks: dict[str, bool],
+    observaciones: str = "",
+) -> str:
+    """
+    Acciones de mejora sugeridas para el aula virtual (Informe 2).
+
+    Se construyen a partir de los parámetros AVAC **incumplidos** y de las
+    observaciones que escribió el jefe de área. Si todo está cumplido y no hay
+    observaciones, no se llama a la IA: se devuelve un texto de mantenimiento.
+    """
+    incumplidos = [
+        PARAMETROS_AVAC.get(campo, campo)
+        for campo, valor in checks.items()
+        if campo in PARAMETROS_AVAC and not valor
+    ]
+
+    if not incumplidos and not observaciones.strip():
+        return (
+            "El aula virtual cumple los doce parámetros evaluados. Se recomienda mantener "
+            "la estructura actual y actualizar los recursos al inicio de cada período."
+        )
+
+    detalle_incumplidos = (
+        "\n".join(f"- {p}" for p in incumplidos)
+        if incumplidos
+        else "- Ninguno: los doce parámetros están cumplidos."
+    )
+    bloque_obs = (
+        f"\n\nOBSERVACIONES DEL JEFE DE ÁREA:\n{observaciones.strip()}"
+        if observaciones.strip()
+        else ""
+    )
+
+    prompt = f"""Eres un analista académico de la Carrera de Computación de la Universidad Politécnica Salesiana (UPS) Cuenca, Ecuador.
+
+Revisas el aula virtual (AVAC) de la asignatura "{asignatura}", grupo {grupo}, a cargo del docente {docente}.
+
+PARÁMETROS INCUMPLIDOS ({len(incumplidos)} de 12):
+{detalle_incumplidos}{bloque_obs}
+
+INSTRUCCIONES:
+- Propón {min(max(len(incumplidos), 2), 4)} acciones de mejora concretas, cada una dirigida a subsanar un parámetro incumplido o a atender una observación.
+- Formato: lista numerada, una oración por acción, en español formal e institucional.
+- Sé específico: menciona el parámetro o recurso a corregir.
+- No repitas el enunciado del parámetro; indica QUÉ debe hacer el docente.
+- NO uses frases como "Es importante destacar" o "Es fundamental"."""
+
+    return _llamar_ia(prompt, max_tokens=400)
+
+
+def consolidar_avac_area(
+    area: str,
+    pct_cumplimiento: float,
+    cumplidos: int,
+    total: int,
+    incumplidos_frecuentes: list[tuple[str, int]],
+) -> dict:
+    """Análisis del área y acciones generales, a partir de los parámetros que más fallan."""
+    if total == 0:
+        return {
+            "analisis_area": "Checklists AVAC pendientes de completar.",
+            "acciones_generales_avac": "",
+        }
+
+    tabla = "\n".join(
+        f"- {PARAMETROS_AVAC.get(campo, campo)}: incumplido en {veces} asignatura(s)"
+        for campo, veces in incumplidos_frecuentes
+    ) or "- No hay parámetros incumplidos."
+
+    analisis = _llamar_ia(
+        f"""Eres un analista académico de la UPS Cuenca.
+
+Área: {area}. Cumplimiento de los parámetros del aula virtual (AVAC): {pct_cumplimiento}%
+({cumplidos} de {total} parámetros evaluados).
+
+PARÁMETROS MÁS INCUMPLIDOS EN EL ÁREA:
+{tabla}
+
+Redacta 3-4 oraciones de análisis del cumplimiento del área. Menciona el porcentaje,
+los parámetros que más fallan y qué implican para la calidad del aula virtual.
+Español formal e institucional. No uses "Es importante destacar" ni "Es fundamental".""",
+        max_tokens=400,
+    )
+
+    acciones = _llamar_ia(
+        f"""Área: {area}. Cumplimiento AVAC: {pct_cumplimiento}%.
+
+PARÁMETROS MÁS INCUMPLIDOS:
+{tabla}
+
+Propón 3-4 acciones de mejora generales para todo el equipo docente del área,
+orientadas a corregir los parámetros que más fallan.
+Lista numerada, una oración por acción. Español formal.""",
+        max_tokens=400,
+    )
+
+    return {"analisis_area": analisis, "acciones_generales_avac": acciones}

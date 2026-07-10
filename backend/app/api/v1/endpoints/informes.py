@@ -232,6 +232,38 @@ def generar_docx_endpoint(
     }
 
 
+@router.get("/{informe_id}/grafico/{nombre}")
+def obtener_grafico(
+    informe_id: int,
+    nombre: str,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """
+    Sirve un gráfico del informe (PNG) para mostrarlo en el panel.
+
+    Solo se aceptan nombres que estén declarados en el propio `contenido_json`,
+    para no permitir leer archivos arbitrarios del disco.
+    """
+    from app.services.doc_generator import GRAFICOS_DIR
+
+    informe = _informe_o_404(db, informe_id)
+    _puede_editar(db, current_user, informe)
+
+    permitidos = {
+        item.get("grafico_ruta")
+        for item in (informe.contenido_json or {}).get("calificaciones_interciclo", []) or []
+        if item.get("grafico_ruta")
+    }
+    if nombre not in permitidos:
+        raise HTTPException(status_code=404, detail="Gráfico no encontrado")
+
+    ruta = GRAFICOS_DIR / nombre
+    if not ruta.exists():
+        raise HTTPException(status_code=404, detail="El gráfico ya no está disponible")
+    return FileResponse(str(ruta), media_type="image/png")
+
+
 @router.get("/{informe_id}/descargar")
 def descargar_docx(
     informe_id: int,

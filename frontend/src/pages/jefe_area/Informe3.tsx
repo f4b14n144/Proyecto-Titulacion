@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import api from '../../services/api'
 import { useAuth } from '../../hooks/useAuth'
 import { descargarInforme } from '../../services/informes.service'
+import GraficoInforme from '../../components/GraficoInforme'
 import type { ApiResponse } from '../../types'
 
 interface Consejo { id: number; periodo_id: number; fecha_consejo: string }
@@ -242,7 +243,17 @@ export default function Informe3() {
                   </div>
                 ))}
               </div>
-              <p className="text-sm text-gray-600 italic">{String(c.analisis_narrativo ?? '')}</p>
+              {/* Distribución por rango de desempeño */}
+              {informe && Boolean(c.grafico_ruta) && (
+                <div className="mb-3">
+                  <GraficoInforme
+                    informeId={informe.id}
+                    nombre={String(c.grafico_ruta)}
+                    alt={`Distribución por rango — ${String(c.asignatura)} grupo ${String(c.grupo)}`}
+                  />
+                </div>
+              )}
+              <p className="text-sm text-gray-600">{String(c.analisis_narrativo ?? '')}</p>
             </div>
           ))}
         </div>

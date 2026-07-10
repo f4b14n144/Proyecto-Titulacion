@@ -177,11 +177,11 @@ export default function Informe4() {
       {Boolean(informe?.contenido_json?.analisis_consolidado_area) && (
         <div className="bg-white rounded-xl border p-5 mb-5">
           <h2 className="font-semibold text-gray-700 mb-3">Análisis Consolidado del Área</h2>
-          <p className="text-sm text-gray-700 italic mb-3">
+          <p className="text-sm text-gray-700 mb-3">
             {String(informe?.contenido_json?.analisis_consolidado_area ?? '')}
           </p>
           <h3 className="font-medium text-gray-600 mb-1 text-sm">Acciones Generales</h3>
-          <p className="text-sm text-gray-700 italic">
+          <p className="text-sm text-gray-700">
             {String(informe?.contenido_json?.acciones_generales_area ?? '')}
           </p>
         </div>

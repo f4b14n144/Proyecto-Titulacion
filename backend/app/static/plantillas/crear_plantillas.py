@@ -389,12 +389,23 @@ def crear_informe_2():
         _celda(fila.cells[0], nombre)
         _celda(fila.cells[1], f"{{{{ 'Sí' if item.{campo} else 'No' }}}}")
     doc.add_paragraph()
-    doc.add_paragraph("Observaciones: {{ item.observaciones }}")
-    doc.add_paragraph("Acciones de mejora: {{ item.acciones_mejora }}")
+    doc.add_paragraph("{%p if item.observaciones %}")
+    doc.add_heading("Observaciones", level=3)
+    doc.add_paragraph("{{ item.observaciones }}")
+    doc.add_paragraph("{%p endif %}")
+    doc.add_paragraph("{%p if item.acciones_mejora %}")
+    doc.add_heading("Acciones de mejora del jefe de área", level=3)
+    doc.add_paragraph("{{ item.acciones_mejora }}")
+    doc.add_paragraph("{%p endif %}")
+    # Generadas por IA a partir de los parámetros incumplidos y las observaciones
+    doc.add_heading("Acciones de mejora sugeridas", level=3)
+    doc.add_paragraph("{{ item.acciones_sugeridas }}")
     doc.add_paragraph("{% endfor %}")
 
     doc.add_heading("Análisis de cumplimiento del área", level=2)
     doc.add_paragraph("{{ analisis_area }}")
+    doc.add_heading("Acciones generales sugeridas para el área", level=3)
+    doc.add_paragraph("{{ acciones_generales_avac }}")
 
     _firmas(doc, [
         ("Jefe de Área", "{{ jefe_titulo }} {{ jefe_nombre }}"),
@@ -455,6 +466,14 @@ def crear_informe_3():
         fila = tbl2.add_row()
         _celda(fila.cells[0], etiqueta, negrita=True, relleno=GRIS_META_HEX)
         _celda(fila.cells[1], f"{{{{ c.{campo} }}}}")
+
+    # Gráfico de pastel con la distribución por rango de desempeño
+    doc.add_paragraph("{%p if c.grafico %}")
+    p_graf = doc.add_paragraph()
+    p_graf.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_graf.add_run("{{ c.grafico }}")
+    doc.add_paragraph("{%p endif %}")
+
     doc.add_paragraph("Análisis narrativo: {{ c.analisis_narrativo }}")
     doc.add_paragraph("Acciones de mejora: {{ c.acciones_mejora }}")
     # Aportes registrados por el docente sobre la materia (sumativos)

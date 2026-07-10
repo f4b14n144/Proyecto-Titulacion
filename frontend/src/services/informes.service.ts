@@ -14,6 +14,15 @@ export async function obtenerDocxBlob(informeId: number): Promise<Blob> {
 }
 
 /**
+ * Obtiene un gráfico del informe como object URL para usarlo en un <img>.
+ * Un <img src> normal no envía el header Authorization, por eso se baja como blob.
+ */
+export async function obtenerGraficoUrl(informeId: number, nombre: string): Promise<string> {
+  const res = await api.get(`/informes/${informeId}/grafico/${nombre}`, { responseType: 'blob' })
+  return URL.createObjectURL(new Blob([res.data], { type: 'image/png' }))
+}
+
+/**
  * Descarga el .docx de un informe usando axios (con el token JWT del interceptor).
  * Un <a href> normal no envía el header Authorization, por eso daba 401.
  */

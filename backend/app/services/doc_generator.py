@@ -9,16 +9,19 @@ Flujo:
 """
 from datetime import datetime, timezone
 from pathlib import Path
-from docxtpl import DocxTemplate
+from docxtpl import DocxTemplate, InlineImage
+from docx.shared import Inches
 from loguru import logger
 from sqlalchemy.orm import Session
 from app.models.informe import Informe
 
 PLANTILLAS_DIR = Path(__file__).parent.parent / "static" / "plantillas"
 DOCX_OUTPUT_DIR = Path(__file__).parent.parent / "static" / "docx"
+GRAFICOS_DIR = Path(__file__).parent.parent / "static" / "graficos"
 
 PLANTILLAS_DIR.mkdir(parents=True, exist_ok=True)
 DOCX_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+GRAFICOS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def _ruta_plantilla(tipo_informe: int) -> Path:
@@ -79,12 +82,43 @@ def _aplanar_contexto(contenido: dict) -> dict:
     return contexto
 
 
+def _incrustar_graficos(doc: DocxTemplate, contexto: dict) -> None:
+    """
+    Convierte las rutas de gráficos guardadas en `contenido_json` en imágenes
+    incrustables. La plantilla las imprime con `{{ c.grafico }}`.
+
+    Si el archivo no existe (p. ej. se regenera un informe antiguo) se deja el
+    hueco vacío en vez de romper la generación.
+    """
+    originales = contexto.get("calificaciones_interciclo") or []
+    if not originales:
+        return
+
+    # Copiar cada item: si mutáramos los originales, los objetos InlineImage
+    # acabarían dentro de contenido_json y no son serializables a JSON.
+    copias = []
+    for item in originales:
+        copia = dict(item)
+        nombre = copia.get("grafico_ruta")
+        if nombre:
+            ruta = GRAFICOS_DIR / nombre
+            if ruta.exists():
+                copia["grafico"] = InlineImage(doc, str(ruta), width=Inches(5.4))
+            else:
+                logger.warning(f"Gráfico no encontrado: {ruta}")
+                copia["grafico"] = ""
+        copias.append(copia)
+    contexto["calificaciones_interciclo"] = copias
+
+
 def _generar_desde_plantilla(
     plantilla_ruta: Path, contexto: dict, ruta_salida: Path
 ) -> None:
     """Renderiza la plantilla Jinja2 .docx con el contexto dado."""
     doc = DocxTemplate(str(plantilla_ruta))
-    doc.render(_aplanar_contexto(contexto))
+    aplanado = _aplanar_contexto(contexto)
+    _incrustar_graficos(doc, aplanado)
+    doc.render(aplanado)
     doc.save(str(ruta_salida))
 
 

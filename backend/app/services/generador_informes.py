@@ -109,6 +109,24 @@ def _aportes_materia(
     }
 
 
+def _generar_grafico_interciclo(
+    informe_id: int, asignatura_id: int, grupo: str, stats: dict, nombre_asig: str
+) -> str | None:
+    """
+    Dibuja el pastel de rangos y lo guarda en `static/graficos/`.
+    Devuelve el nombre del archivo, o None si no hay datos suficientes.
+    """
+    from app.services.doc_generator import GRAFICOS_DIR
+    from app.services.graficos import grafico_rangos_interciclo, guardar_png
+
+    png = grafico_rangos_interciclo(stats, f"{nombre_asig} — Grupo {grupo}")
+    if png is None:
+        return None
+    nombre = f"interciclo_inf{informe_id}_asig{asignatura_id}_{grupo}.png"
+    guardar_png(png, GRAFICOS_DIR / nombre)
+    return nombre
+
+
 def _respuesta_docente(db: Session, docente_id: int, consejo_id: int) -> str:
     """Recupera la última respuesta del docente para este consejo, si existe."""
     noti = (
@@ -317,31 +335,56 @@ def generar_informe_2(db: Session, consejo_id: int, area_id: int) -> Informe:
     checklists_data = []
     total_params = 0
     cumplidos = 0
+    # Cuántas veces falla cada parámetro en el área (insumo del consolidado)
+    fallos_por_campo: dict[str, int] = {campo: 0 for campo in campos_bool}
 
     for c in checklists_raw:
         asig = db.query(Asignatura).filter(Asignatura.id == c.asignatura_id).first()
-        datos = {
-            "docente": _nombre_usuario(db, c.usuario_id),
-            "asignatura": asig.nombre if asig else f"#{c.asignatura_id}",
-            "grupo": c.grupo,
-            "observaciones": c.observaciones or "",
-            "acciones_mejora": c.acciones_mejora or "",
-        }
-        for campo in campos_bool:
-            valor = getattr(c, campo)
-            datos[campo] = valor
+        nombre_asig = asig.nombre if asig else f"#{c.asignatura_id}"
+        docente = _nombre_usuario(db, c.usuario_id)
+
+        checks = {campo: bool(getattr(c, campo)) for campo in campos_bool}
+        for campo, valor in checks.items():
             total_params += 1
             if valor:
                 cumplidos += 1
+            else:
+                fallos_por_campo[campo] += 1
+
+        datos = {
+            "docente": docente,
+            "asignatura": nombre_asig,
+            "grupo": c.grupo,
+            "observaciones": c.observaciones or "",
+            # Lo que escribió el jefe de área
+            "acciones_mejora": c.acciones_mejora or "",
+            # Lo que sugiere la IA a partir de los checks incumplidos + observaciones
+            "acciones_sugeridas": ia_engine.sugerir_acciones_avac(
+                docente=docente,
+                asignatura=nombre_asig,
+                grupo=c.grupo,
+                checks=checks,
+                observaciones=c.observaciones or "",
+            ),
+            **checks,
+        }
         checklists_data.append(datos)
 
     pct_cumplimiento = round(cumplidos / total_params * 100, 1) if total_params > 0 else 0
 
-    analisis_area = (
-        f"El área {area.nombre if area else ''} presenta un cumplimiento del "
-        f"{pct_cumplimiento}% de los parámetros AVAC evaluados "
-        f"({cumplidos} de {total_params} parámetros)."
-    ) if checklists_data else "Checklists AVAC pendientes de completar."
+    # Los parámetros que más fallan, de mayor a menor
+    incumplidos_frecuentes = sorted(
+        [(campo, veces) for campo, veces in fallos_por_campo.items() if veces > 0],
+        key=lambda x: x[1],
+        reverse=True,
+    )
+    consolidado = ia_engine.consolidar_avac_area(
+        area=area.nombre if area else "",
+        pct_cumplimiento=pct_cumplimiento,
+        cumplidos=cumplidos,
+        total=total_params,
+        incumplidos_frecuentes=incumplidos_frecuentes,
+    )
 
     informe.contenido_json = {
         "periodo_nombre": periodo.nombre if periodo else "",
@@ -350,7 +393,7 @@ def generar_informe_2(db: Session, consejo_id: int, area_id: int) -> Informe:
         **_datos_jefe(db, area_id, consejo.periodo_id),
         "checklists": checklists_data,
         "pct_cumplimiento": pct_cumplimiento,
-        "analisis_area": analisis_area,
+        **consolidado,
         "secciones": {},
     }
     informe.estado = "BORRADOR"
@@ -427,10 +470,19 @@ def generar_informe_3(db: Session, consejo_id: int, area_id: int) -> Informe:
             estudiantes=estudiantes,
         )
 
+        nombre_asig = asig.nombre if asig else f"#{asig_doc.asignatura_id}"
+        grupo_cal = cal.datos_json.get("grupo", asig_doc.grupo)
+
+        # Gráfico de pastel con la distribución por rango de desempeño
+        grafico_ruta = _generar_grafico_interciclo(
+            informe.id, asig_doc.asignatura_id, grupo_cal, stats, nombre_asig
+        )
+
         calificaciones_data.append({
-            "asignatura": asig.nombre if asig else f"#{asig_doc.asignatura_id}",
-            "grupo": cal.datos_json.get("grupo", asig_doc.grupo),
+            "asignatura": nombre_asig,
+            "grupo": grupo_cal,
             "docente": _nombre_usuario(db, asig_doc.usuario_id),
+            "grafico_ruta": grafico_ruta,
             # Aportes sumativos que el docente registró sobre esta materia
             **_aportes_materia(db, consejo_id, asig_doc.asignatura_id, asig_doc.grupo),
             **analisis,
