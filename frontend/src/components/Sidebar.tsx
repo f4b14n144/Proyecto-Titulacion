@@ -3,7 +3,7 @@ import { useAuth } from '../hooks/useAuth'
 import {
   LayoutDashboard, Users, Calendar, Gavel, Layers, BookOpen,
   ClipboardList, Upload, FileText, Files, ClipboardCheck,
-  FileBarChart, MessageSquare, Lightbulb, GraduationCap, type LucideIcon,
+  FileBarChart, MessageSquare, Lightbulb, GraduationCap, Mail, type LucideIcon,
 } from 'lucide-react'
 
 type Item = { to: string; label: string; icon: LucideIcon; exact?: boolean }
@@ -29,6 +29,9 @@ const directorGroups: Grupo[] = [
     { to: '/director/informe1', label: 'Informe 1', icon: FileText },
     { to: '/director/informes', label: 'Ver Informes', icon: Files },
   ]},
+  { titulo: 'Comunicación', items: [
+    { to: '/director/correos', label: 'Enviar correos', icon: Mail },
+  ]},
 ]
 
 const jefeGroups: Grupo[] = [
@@ -42,6 +45,9 @@ const jefeGroups: Grupo[] = [
     { to: '/jefe/informe3', label: 'Informe 3 — Visitas', icon: ClipboardList },
     { to: '/jefe/informe4', label: 'Informe 4 — Final', icon: FileBarChart },
     { to: '/jefe/informes', label: 'Ver y editar informes', icon: Files },
+  ]},
+  { titulo: 'Comunicación', items: [
+    { to: '/jefe/correos', label: 'Enviar correos', icon: Mail },
   ]},
 ]
 

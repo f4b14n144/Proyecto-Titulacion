@@ -1,0 +1,210 @@
+"""
+Plantillas de los correos institucionales.
+
+El texto es el entregado por la dirección de carrera y no debe alterarse: solo se
+sustituyen los datos personalizados (docente, estudiante, materia, remitente).
+
+Cada función devuelve `(asunto, cuerpo_html)`. El logo de la universidad lo
+antepone `mail_service.enviar_email` como imagen inline.
+"""
+from html import escape
+
+_ESTILO_P = 'style="margin:0 0 12px 0;line-height:1.5;font-family:Calibri,Arial,sans-serif;font-size:14px;color:#333"'
+_ESTILO_UL = 'style="margin:0 0 12px 20px;line-height:1.5;font-family:Calibri,Arial,sans-serif;font-size:14px;color:#333"'
+
+UNIVERSIDAD = "Universidad Politécnica Salesiana"
+CARRERA = "Carrera de Ciencias de la Computación"
+
+
+def _p(texto: str) -> str:
+    return f"<p {_ESTILO_P}>{texto}</p>"
+
+
+def _lista(items: list[str]) -> str:
+    lis = "".join(f"<li>{i}</li>" for i in items)
+    return f"<ul {_ESTILO_UL}>{lis}</ul>"
+
+
+def _tratamiento(titulo_docente: str) -> str:
+    """
+    "Estimado/a [titulo]. [Nombre]" — el título ya suele traer su punto ("Ing."),
+    así que se normaliza para no terminar con "Ing.." ni pegado al nombre.
+    """
+    titulo = (titulo_docente or "").strip().rstrip(".").strip()
+    return f"{escape(titulo)}. " if titulo else ""
+
+
+def _firma(remitente_nombre: str, remitente_cargo: str) -> str:
+    return (
+        _p("Atentamente,")
+        + _p(
+            f"<strong>{escape(remitente_nombre)}</strong><br>"
+            f"{escape(remitente_cargo)}<br>"
+            f"{CARRERA}<br>"
+            f"{UNIVERSIDAD}"
+        )
+    )
+
+
+# ──────────────────────────────────────────────────────────────────
+# Anexo B — Correo a DOCENTES (observaciones y acciones de mejora)
+# ──────────────────────────────────────────────────────────────────
+
+def correo_docente_materia(
+    titulo_docente: str,
+    nombre_docente: str,
+    nombre_materia: str,
+    remitente_nombre: str,
+    remitente_cargo: str,
+) -> tuple[str, str]:
+    tratamiento = _tratamiento(titulo_docente)
+    asunto = f"Solicitud de observaciones y propuestas de mejora — {nombre_materia}"
+
+    cuerpo = (
+        _p(f"Estimado/a {tratamiento}{escape(nombre_docente)}:")
+        + _p("Reciba un cordial saludo.")
+        + _p(
+            "Con el objetivo de fortalecer los procesos de evaluación y mejora continua de la "
+            f"{CARRERA}, me permito solicitar muy comedidamente su valiosa colaboración mediante "
+            "el envío de observaciones y propuestas de mejora relacionadas con la asignatura "
+            f'"<strong>{escape(nombre_materia)}</strong>", que actualmente imparte.'
+        )
+        + _p("En caso de considerarlo pertinente, agradeceré remitir la siguiente información:")
+        + _lista([
+            "<strong>Observaciones del Docente a la Materia</strong>, en las que pueda exponer "
+            "los aspectos relevantes identificados durante el desarrollo de la asignatura.",
+            "<strong>Acciones de Mejora propuestas por el Docente a la Materia</strong>, en las "
+            "que plantee recomendaciones o iniciativas orientadas al fortalecimiento del proceso "
+            "de enseñanza-aprendizaje y a la mejora continua de la asignatura.",
+        ])
+        + _p(
+            "Su aporte constituye un insumo de gran valor para el análisis, la evaluación y el "
+            "fortalecimiento continuo de la carrera, por lo que agradezco de antemano su tiempo, "
+            "disposición y colaboración."
+        )
+        + _p("Quedo atento/a a cualquier consulta o información adicional que requiera.")
+        + _firma(remitente_nombre, remitente_cargo)
+    )
+    return asunto, cuerpo
+
+
+# ──────────────────────────────────────────────────────────────────
+# Anexo C — Correo a ESTUDIANTES (apreciaciones sobre la asignatura)
+# ──────────────────────────────────────────────────────────────────
+
+def correo_estudiante_materia(
+    nombre_estudiante: str,
+    nombre_materia: str,
+    titulo_docente: str,
+    nombre_docente: str,
+    remitente_nombre: str,
+    remitente_cargo: str,
+) -> tuple[str, str]:
+    docente = f"{titulo_docente} {nombre_docente}".strip()
+    asunto = f"Consulta sobre el desarrollo de la asignatura — {nombre_materia}"
+
+    cuerpo = (
+        _p(f"Estimado/a {escape(nombre_estudiante)}:")
+        + _p("Reciba un cordial saludo.")
+        + _p(
+            "Como parte de los procesos de seguimiento académico y mejora continua de la "
+            f"{CARRERA}, me permito solicitar muy comedidamente su colaboración para conocer sus "
+            "apreciaciones respecto al desarrollo de la asignatura "
+            f'"<strong>{escape(nombre_materia)}</strong>", impartida por el/la '
+            f"<strong>{escape(docente)}</strong>."
+        )
+        + _p(
+            "En caso de que lo considere pertinente, agradeceré que pueda compartir observaciones "
+            "relacionadas con alguno de los siguientes aspectos:"
+        )
+        + _lista([
+            "La asistencia y puntualidad del docente.",
+            "El cumplimiento del contenido establecido en el sílabo de la asignatura.",
+            "La realización de prácticas, cuando estas correspondan a la naturaleza de la materia.",
+            "La utilización de rúbricas para las actividades calificadas (evaluaciones, trabajos, "
+            "foros, proyectos u otras).",
+            "La realización de actividades que fomenten la participación de los estudiantes en "
+            "procesos de investigación.",
+            "Cualquier otra observación o sugerencia que considere importante respecto al "
+            "desarrollo de la asignatura o al proceso de enseñanza-aprendizaje.",
+        ])
+        + _p(
+            "Es importante señalar que, si considera que el desarrollo de la asignatura se está "
+            "llevando a cabo de manera adecuada y no tiene observaciones que realizar, no es "
+            "necesario responder a este correo. La respuesta únicamente será necesaria si desea "
+            "comunicar alguna observación, comentario o sugerencia que contribuya al "
+            "fortalecimiento de la calidad académica."
+        )
+        + _p(
+            "Toda la información recibida será tratada con la debida reserva y utilizada "
+            "exclusivamente con fines de seguimiento académico y de mejora continua."
+        )
+        + _p(
+            "Agradezco de antemano su tiempo, colaboración y compromiso con el fortalecimiento "
+            "de nuestra carrera."
+        )
+        + _firma(remitente_nombre, remitente_cargo)
+    )
+    return asunto, cuerpo
+
+
+# ──────────────────────────────────────────────────────────────────
+# Correo a DOCENTES sobre visitas áulicas (requerimiento 14)
+# ──────────────────────────────────────────────────────────────────
+
+def correo_visita_aulica(
+    titulo_docente: str,
+    nombre_docente: str,
+    nombre_materia: str,
+    remitente_nombre: str,
+    remitente_cargo: str,
+) -> tuple[str, str]:
+    tratamiento = _tratamiento(titulo_docente)
+    asunto = f"Visita áulica — {nombre_materia}"
+
+    cuerpo = (
+        _p(f"Estimado/a {tratamiento}{escape(nombre_docente)}:")
+        + _p("Reciba un cordial saludo.")
+        + _p(
+            "Dentro del proceso de acompañamiento y mejora continua de la "
+            f"{CARRERA}, se ha previsto realizar una <strong>visita áulica</strong> a la "
+            f'asignatura "<strong>{escape(nombre_materia)}</strong>", que usted imparte.'
+        )
+        + _p(
+            "Con el fin de coordinar la visita y contar con la información necesaria, agradeceré "
+            "que pueda confirmarnos los siguientes aspectos:"
+        )
+        + _lista([
+            "Día y hora más convenientes para realizar la visita.",
+            "El avance del sílabo y el contenido previsto para esa sesión.",
+            "Si la sesión contempla componente práctico o de laboratorio.",
+            "Las rúbricas utilizadas para las actividades calificadas.",
+            "Las actividades orientadas a fomentar la participación de los estudiantes en "
+            "procesos de investigación.",
+        ])
+        + _p(
+            "La visita tiene un carácter formativo y de acompañamiento; su propósito es "
+            "identificar buenas prácticas y oportunidades de mejora, nunca fiscalizar."
+        )
+        + _p("Quedo atento/a a su respuesta y agradezco de antemano su colaboración.")
+        + _firma(remitente_nombre, remitente_cargo)
+    )
+    return asunto, cuerpo
+
+
+# ──────────────────────────────────────────────────────────────────
+# Cargo legible del remitente
+# ──────────────────────────────────────────────────────────────────
+
+_CARGOS = {
+    "DIRECTOR_CARRERA": "Dirección de Carrera",
+    "JEFE_AREA": "Jefatura de Área",
+    "DOCENTE": "Docente",
+}
+
+
+def cargo_de_rol(rol: str, area_nombre: str | None = None) -> str:
+    """Texto del `[Cargo]` de la firma, a partir del rol efectivo del remitente."""
+    if rol == "JEFE_AREA" and area_nombre:
+        return f"Jefatura de Área de {area_nombre}"
+    return _CARGOS.get(rol, "Carrera de Ciencias de la Computación")
