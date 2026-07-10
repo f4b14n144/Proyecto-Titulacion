@@ -26,16 +26,29 @@ AZUL_HEX = "003DA5"        # relleno encabezados de tabla
 GRIS_META_HEX = "E8EDF6"   # relleno columna de etiquetas (metadatos)
 
 
+def _fuente_calibri(estilo, tamano: Pt, *, negrita: bool, color: RGBColor):
+    """Aplica Calibri, sin cursiva, en un estilo (requisito del tutor)."""
+    estilo.font.name = "Calibri"
+    estilo.font.size = tamano
+    estilo.font.bold = negrita
+    estilo.font.italic = False
+    estilo.font.color.rgb = color
+    # Word usa rFonts para elegir la tipografía de cada script; sin esto,
+    # los encabezados heredan la fuente del tema (Cambria) al abrirlos.
+    rpr = estilo.element.get_or_add_rPr()
+    rfonts = rpr.get_or_add_rFonts()
+    for attr in ("w:ascii", "w:hAnsi", "w:cs", "w:eastAsia"):
+        rfonts.set(qn(attr), "Calibri")
+
+
 def _aplicar_estilos(doc: Document):
     """Define estilos base uniformes para TODOS los informes.
 
-    Así cada informe (1-4) se ve idéntico: misma tipografía, mismos tamaños
-    y colores de encabezado, mismo interlineado y justificado.
+    Así cada informe (1-4) se ve idéntico: misma tipografía (Calibri, sin
+    cursiva), mismos tamaños y colores de encabezado, mismo interlineado.
     """
     normal = doc.styles["Normal"]
-    normal.font.name = "Calibri"
-    normal.font.size = Pt(11)
-    normal.font.color.rgb = GRIS_TEXTO
+    _fuente_calibri(normal, Pt(11), negrita=False, color=GRIS_TEXTO)
     pf = normal.paragraph_format
     pf.space_after = Pt(6)
     pf.line_spacing = 1.15
@@ -43,28 +56,19 @@ def _aplicar_estilos(doc: Document):
 
     # Título del informe (Heading 1)
     h1 = doc.styles["Heading 1"]
-    h1.font.name = "Calibri"
-    h1.font.size = Pt(18)
-    h1.font.bold = True
-    h1.font.color.rgb = UPS_BLUE
+    _fuente_calibri(h1, Pt(18), negrita=True, color=UPS_BLUE)
     h1.paragraph_format.space_before = Pt(0)
     h1.paragraph_format.space_after = Pt(12)
 
     # Secciones principales (Heading 2)
     h2 = doc.styles["Heading 2"]
-    h2.font.name = "Calibri"
-    h2.font.size = Pt(14)
-    h2.font.bold = True
-    h2.font.color.rgb = UPS_BLUE
+    _fuente_calibri(h2, Pt(14), negrita=True, color=UPS_BLUE)
     h2.paragraph_format.space_before = Pt(14)
     h2.paragraph_format.space_after = Pt(4)
 
     # Subsecciones (Heading 3)
     h3 = doc.styles["Heading 3"]
-    h3.font.name = "Calibri"
-    h3.font.size = Pt(12)
-    h3.font.bold = True
-    h3.font.color.rgb = RGBColor(0x22, 0x22, 0x22)
+    _fuente_calibri(h3, Pt(12), negrita=True, color=RGBColor(0x22, 0x22, 0x22))
     h3.paragraph_format.space_before = Pt(8)
     h3.paragraph_format.space_after = Pt(2)
 
@@ -86,6 +90,7 @@ def _celda(cell, texto: str, *, negrita=False, blanco=False, relleno=None):
         run.font.name = "Calibri"
         run.font.size = Pt(11)
         run.font.bold = negrita
+        run.font.italic = False
         run.font.color.rgb = BLANCO if blanco else GRIS_TEXTO
     if relleno:
         _sombrear(cell, relleno)
@@ -142,23 +147,28 @@ def _add_campo(parrafo, instr: str):
 
 
 def _configurar_seccion(doc: Document):
-    """Header con logo UPS + footer con 'Carrera de Computación' y numeración X/Y."""
-    section = doc.sections[0]
+    """
+    Header con logo UPS + footer con 'Carrera de Computación' y numeración.
 
-    # Encabezado: logo institucional arriba a la IZQUIERDA + línea divisoria
+    La carátula (página 1) NO lleva encabezado ni número de página: se usa
+    `different_first_page_header_footer`, de modo que la numeración empieza en
+    la página 2, como pide el formato institucional.
+    """
+    section = doc.sections[0]
+    section.different_first_page_header_footer = True  # la carátula va limpia
+
+    # Encabezado (desde la página 2): logo a la IZQUIERDA + línea divisoria
     header = section.header
     hp = header.paragraphs[0]
     hp.alignment = WD_ALIGN_PARAGRAPH.LEFT
     if LOGO.exists():
         hp.add_run().add_picture(str(LOGO), width=Inches(2.4))
-    # Línea horizontal bajo el logo (borde inferior del párrafo)
     _borde_inferior(hp)
 
-    # Pie de página: línea divisoria + carrera (izq) y número de página "X / Y" (der)
+    # Pie de página (desde la página 2): carrera (izq) y número de página (der)
     footer = section.footer
     fp = footer.paragraphs[0]
     _borde_superior(fp)
-    # Tabulación: texto a la izquierda, numeración a la derecha
     from docx.enum.text import WD_TAB_ALIGNMENT
     from docx.shared import Cm
     fp.paragraph_format.tab_stops.add_tab_stop(Cm(16.5), WD_TAB_ALIGNMENT.RIGHT)
@@ -167,6 +177,97 @@ def _configurar_seccion(doc: Document):
     _add_campo(fp, "PAGE")
     fp.add_run(" / ")
     _add_campo(fp, "NUMPAGES")
+
+
+def _parrafo(doc, texto, *, tamano=11, negrita=False, color=GRIS_TEXTO,
+             alineacion=WD_ALIGN_PARAGRAPH.LEFT, espacio_antes=0, espacio_despues=6):
+    """Párrafo con formato directo (Calibri, sin cursiva) — usado en la carátula."""
+    p = doc.add_paragraph()
+    p.alignment = alineacion
+    p.paragraph_format.space_before = Pt(espacio_antes)
+    p.paragraph_format.space_after = Pt(espacio_despues)
+    run = p.add_run(texto)
+    run.font.name = "Calibri"
+    run.font.size = Pt(tamano)
+    run.font.bold = negrita
+    run.font.italic = False
+    run.font.color.rgb = color
+    return p
+
+
+# El ordinal del informe según su tipo (aparece en la carátula)
+ORDINALES = {1: "PRIMER", 2: "SEGUNDO", 3: "TERCER", 4: "CUARTO"}
+
+
+def _caratula(doc: Document, tipo: int):
+    """
+    Página 1 — carátula institucional, según el formato entregado por el tutor.
+
+    El área, el período, las carreras y el jefe salen del sistema. No usa estilos
+    de encabezado para que la carátula no aparezca en la tabla de contenidos.
+    """
+    ordinal = ORDINALES.get(tipo, "")
+
+    _parrafo(doc, f"{ordinal} INFORME DE", tamano=30, negrita=True, color=UPS_BLUE,
+             espacio_despues=0)
+    _parrafo(doc, "JEFATURA DE ÁREA DE", tamano=30, negrita=True, color=UPS_BLUE,
+             espacio_despues=0)
+    p = _parrafo(doc, "{{ area_nombre|upper }}", tamano=30, negrita=True, color=UPS_BLUE,
+                 espacio_despues=10)
+    _borde_inferior(p)
+
+    _parrafo(doc, "CORRESPONDIENTE AL PERIODO {{ periodo_numero }}",
+             tamano=13, negrita=True, color=UPS_BLUE, espacio_antes=8, espacio_despues=0)
+    p = _parrafo(doc, "{{ carreras_texto }}", tamano=13, negrita=True, color=UPS_BLUE,
+                 espacio_despues=10)
+    _borde_inferior(p)
+
+    _parrafo(doc, "UNIVERSIDAD POLITÉCNICA SALESIANA",
+             tamano=14, negrita=True, color=UPS_BLUE, espacio_antes=40)
+    _parrafo(doc, "SEDE CUENCA.", tamano=12, negrita=True, color=UPS_BLUE,
+             espacio_antes=10)
+
+    _parrafo(doc, "{{ jefe_titulo }} {{ jefe_nombre }}",
+             tamano=13, negrita=True, color=GRIS_TEXTO, espacio_antes=90, espacio_despues=0)
+    _parrafo(doc, "Jefe de Área de {{ area_nombre }}", tamano=9, color=GRIS_TEXTO)
+
+    doc.add_page_break()
+
+
+def _tabla_contenidos(doc: Document):
+    """
+    Página 2 — tabla de contenidos.
+
+    Se inserta un campo TOC real de Word. Word lo llena al abrir el documento
+    (o con F9); por eso se deja un texto de respaldo dentro del campo.
+    """
+    _parrafo(doc, "TABLA DE CONTENIDOS", tamano=16, negrita=True, color=UPS_BLUE,
+             alineacion=WD_ALIGN_PARAGRAPH.CENTER, espacio_despues=14)
+
+    parrafo = doc.add_paragraph()
+    run = parrafo.add_run()
+
+    begin = OxmlElement("w:fldChar")
+    begin.set(qn("w:fldCharType"), "begin")
+    begin.set(qn("w:dirty"), "true")  # fuerza a Word a rellenarlo al abrir
+
+    instr = OxmlElement("w:instrText")
+    instr.set(qn("xml:space"), "preserve")
+    instr.text = r'TOC \o "1-3" \h \z \u'
+
+    separador = OxmlElement("w:fldChar")
+    separador.set(qn("w:fldCharType"), "separate")
+
+    texto = OxmlElement("w:t")
+    texto.text = "Actualice esta tabla con clic derecho → Actualizar campos (F9)."
+
+    end = OxmlElement("w:fldChar")
+    end.set(qn("w:fldCharType"), "end")
+
+    for el in (begin, instr, separador, texto, end):
+        run._r.append(el)
+
+    doc.add_page_break()
 
 
 def _borde(parrafo, lado: str):
@@ -191,19 +292,20 @@ def _borde_superior(parrafo):
 
 
 def _encabezado_institucional(doc: Document, tipo: int, nombre: str):
-    """Bloque de encabezado UPS común a todos los informes."""
-    _aplicar_estilos(doc)         # estilos uniformes (tipografía, headings, interlineado)
-    _configurar_seccion(doc)      # logo en header + footer con numeración en todas las hojas
+    """
+    Estructura común a los 4 informes:
+      página 1 → carátula (sin numeración)
+      página 2 → tabla de contenidos
+      página 3 → título del informe y contenido
+    """
+    _aplicar_estilos(doc)         # Calibri sin cursiva, headings, interlineado
+    _configurar_seccion(doc)      # logo/pie desde la pág. 2; carátula limpia
+
+    _caratula(doc, tipo)          # página 1
+    _tabla_contenidos(doc)        # página 2
 
     n = doc.add_heading(f"INFORME {tipo} — {nombre.upper()}", level=1)
     n.alignment = WD_ALIGN_PARAGRAPH.CENTER
-
-    sub = doc.add_paragraph("Carrera de Computación · Consejo de Carrera")
-    sub.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    for run in sub.runs:
-        run.font.size = Pt(10)
-        run.font.color.rgb = GRIS_TEXTO
-        run.italic = True
     doc.add_paragraph()
 
 
@@ -331,7 +433,9 @@ def crear_informe_3():
         _celda(fila.cells[1], f"{{{{ 'Sí' if v.{campo} else 'No' }}}}")
     doc.add_paragraph("Observaciones estudiantes: {{ v.observaciones_estudiantes }}")
     doc.add_paragraph("Observaciones docente: {{ v.observaciones_docente }}")
-    doc.add_paragraph("Acciones docente: {{ v.acciones_docente }}")
+    doc.add_paragraph(
+        "Acciones de mejora del jefe de área al docente: {{ v.acciones_docente }}"
+    )
     doc.add_paragraph("{% endfor %}")
 
     doc.add_heading("PARTE B — Calificaciones Interciclo (Parcial 1)", level=2)

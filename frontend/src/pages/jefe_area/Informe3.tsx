@@ -205,7 +205,7 @@ export default function Informe3() {
                 {[
                   { campo: 'observaciones_estudiantes', label: 'Observaciones de estudiantes' },
                   { campo: 'observaciones_docente', label: 'Observaciones del docente' },
-                  { campo: 'acciones_docente', label: 'Acciones de mejora del docente' },
+                  { campo: 'acciones_docente', label: 'Acciones de mejora del jefe de área al docente' },
                 ].map(({ campo, label }) => (
                   <div key={campo} className="mb-2">
                     <label className="block text-xs text-gray-500 mb-0.5">{label}</label>

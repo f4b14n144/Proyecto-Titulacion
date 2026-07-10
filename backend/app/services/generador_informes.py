@@ -8,6 +8,7 @@ Cada función:
   4. Crea o actualiza el registro en tabla `informes`
   5. Llama a doc_generator para producir el .docx
 """
+import re
 from datetime import datetime, timezone
 from loguru import logger
 from sqlalchemy.orm import Session
@@ -221,6 +222,30 @@ def _datos_jefe(db: Session, area_id: int, periodo_id: int) -> dict:
     }
 
 
+# Texto de la carátula. Es editable desde el informe (contenido_json).
+CARRERAS_TEXTO = "CARRERAS DE COMPUTACIÓN E INGENIERÍA DE SISTEMAS"
+
+
+def _periodo_numero(periodo: PeriodoAcademico | None) -> str:
+    """
+    Número del período para la carátula ("CORRESPONDIENTE AL PERIODO 67").
+
+    Los nombres tienen forma "2025-2026 (67)"; si no hay paréntesis, se devuelve
+    el nombre completo.
+    """
+    if periodo is None:
+        return ""
+    m = re.search(r"\((\d+)\)", periodo.nombre or "")
+    return m.group(1) if m else (periodo.nombre or "")
+
+
+def _datos_caratula(periodo: PeriodoAcademico | None) -> dict:
+    return {
+        "periodo_numero": _periodo_numero(periodo),
+        "carreras_texto": CARRERAS_TEXTO,
+    }
+
+
 def generar_informe_1(db: Session, consejo_id: int, area_id: int) -> Informe:
     """
     Informe 1 del ÁREA indicada.
@@ -245,6 +270,7 @@ def generar_informe_1(db: Session, consejo_id: int, area_id: int) -> Informe:
 
     informe.contenido_json = {
         "periodo_nombre": periodo.nombre if periodo else "",
+        **_datos_caratula(periodo),
         "fecha_consejo": str(consejo.fecha_consejo) if consejo else "",
         "fecha_informe": str(datetime.now(timezone.utc).date()),
         "area_nombre": area.nombre if area else "",
@@ -320,6 +346,7 @@ def generar_informe_2(db: Session, consejo_id: int, area_id: int) -> Informe:
     informe.contenido_json = {
         "periodo_nombre": periodo.nombre if periodo else "",
         "area_nombre": area.nombre if area else "",
+        **_datos_caratula(periodo),
         **_datos_jefe(db, area_id, consejo.periodo_id),
         "checklists": checklists_data,
         "pct_cumplimiento": pct_cumplimiento,
@@ -412,6 +439,7 @@ def generar_informe_3(db: Session, consejo_id: int, area_id: int) -> Informe:
     informe.contenido_json = {
         "periodo_nombre": periodo.nombre if periodo else "",
         "area_nombre": area.nombre if area else "",
+        **_datos_caratula(periodo),
         **_datos_jefe(db, area_id, consejo.periodo_id),
         "visitas": visitas_data,
         "calificaciones_interciclo": calificaciones_data,
@@ -503,6 +531,7 @@ def generar_informe_4(db: Session, consejo_id: int, area_id: int) -> Informe:
     informe.contenido_json = {
         "periodo_nombre": periodo.nombre if periodo else "",
         "area_nombre": area.nombre if area else "",
+        **_datos_caratula(periodo),
         **_datos_jefe(db, area_id, consejo.periodo_id),
         "calificaciones_finales": calificaciones_data,
         **consolidado,
