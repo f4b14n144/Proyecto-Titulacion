@@ -40,6 +40,7 @@ const jefeGroups: Grupo[] = [
     { to: '/jefe/informe2', label: 'Informe 2 — AVAC', icon: ClipboardCheck },
     { to: '/jefe/informe3', label: 'Informe 3 — Visitas', icon: ClipboardList },
     { to: '/jefe/informe4', label: 'Informe 4 — Final', icon: FileBarChart },
+    { to: '/jefe/informes', label: 'Ver y editar informes', icon: Files },
   ]},
 ]
 

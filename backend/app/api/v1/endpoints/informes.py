@@ -57,6 +57,31 @@ class SeccionesUpdate(BaseModel):
     secciones: dict[str, str]
 
 
+class ContenidoUpdate(BaseModel):
+    """Contenido completo del informe, tal como quedó tras editarlo en la UI."""
+    contenido_json: dict[str, Any]
+
+
+def _informe_o_404(db: Session, informe_id: int) -> Informe:
+    informe = db.query(Informe).filter(Informe.id == informe_id).first()
+    if not informe:
+        raise HTTPException(status_code=404, detail="Informe no encontrado")
+    return informe
+
+
+def _puede_editar(db: Session, usuario: Usuario, informe: Informe) -> None:
+    """
+    Solo la directora (cualquier informe) y el jefe de área (los de SU área).
+    Un docente no edita informes.
+    """
+    rol = getattr(usuario, "rol_efectivo", usuario.rol.nombre)
+    if rol == "DIRECTOR_CARRERA":
+        return
+    if rol == "JEFE_AREA" and informe.area_id in _areas_del_jefe(db, usuario.id):
+        return
+    raise HTTPException(status_code=403, detail="No puedes editar este informe")
+
+
 def _mapa_area_jefe(db: Session) -> dict[int, Usuario]:
     """area_id → jefe de esa área (según su jefatura vigente)."""
     from app.models.jefatura import JefaturaArea
@@ -115,10 +140,23 @@ def obtener_informe(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
-    informe = db.query(Informe).filter(Informe.id == informe_id).first()
-    if not informe:
-        raise HTTPException(status_code=404, detail="Informe no encontrado")
-    return {"data": InformeOut.model_validate(informe), "message": "OK", "success": True}
+    informe = _informe_o_404(db, informe_id)
+
+    # Lectura: la directora ve todos; el jefe, los de su área; el docente, ninguno.
+    rol = getattr(current_user, "rol_efectivo", current_user.rol.nombre)
+    if rol == "JEFE_AREA" and informe.area_id not in _areas_del_jefe(db, current_user.id):
+        raise HTTPException(status_code=403, detail="No puedes ver este informe")
+    if rol not in ("DIRECTOR_CARRERA", "JEFE_AREA"):
+        raise HTTPException(status_code=403, detail="No puedes ver este informe")
+
+    from app.models.area import Area
+    area = db.query(Area).filter(Area.id == informe.area_id).first()
+    out = InformeOut.model_validate(informe)
+    out.area_nombre = area.nombre if area else None
+    jefe = _mapa_area_jefe(db).get(informe.area_id)
+    if jefe:
+        out.jefe_id, out.jefe_nombre = jefe.id, jefe.nombre_completo
+    return {"data": out, "message": "OK", "success": True}
 
 
 @router.put("/{informe_id}/secciones", response_model=dict)
@@ -129,9 +167,8 @@ def actualizar_secciones(
     current_user: Usuario = Depends(get_current_user),
 ):
     """Permite al jefe editar secciones del informe antes de exportar."""
-    informe = db.query(Informe).filter(Informe.id == informe_id).first()
-    if not informe:
-        raise HTTPException(status_code=404, detail="Informe no encontrado")
+    informe = _informe_o_404(db, informe_id)
+    _puede_editar(db, current_user, informe)
 
     # Construir un dict NUEVO para que SQLAlchemy detecte el cambio en la columna JSON
     # (reasignar el mismo objeto no marca la fila como modificada)
@@ -145,6 +182,34 @@ def actualizar_secciones(
     return {"data": InformeOut.model_validate(informe), "message": "Secciones actualizadas", "success": True}
 
 
+@router.put("/{informe_id}/contenido", response_model=dict)
+def actualizar_contenido(
+    informe_id: int,
+    payload: ContenidoUpdate,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """
+    Reemplaza el contenido completo del informe.
+
+    Es el endpoint del editor genérico: TODO el contenido es editable, incluidos
+    los nombres de los docentes, el área, el período y el texto de la carátula.
+    """
+    informe = _informe_o_404(db, informe_id)
+    _puede_editar(db, current_user, informe)
+
+    informe.contenido_json = payload.contenido_json
+    informe.estado = "REVISANDO"
+    flag_modified(informe, "contenido_json")  # sin esto la columna JSON no persiste
+    db.commit()
+    db.refresh(informe)
+    return {
+        "data": InformeOut.model_validate(informe),
+        "message": "Contenido actualizado",
+        "success": True,
+    }
+
+
 @router.post("/{informe_id}/generar-docx", response_model=dict)
 def generar_docx_endpoint(
     informe_id: int,
@@ -152,9 +217,8 @@ def generar_docx_endpoint(
     current_user: Usuario = Depends(get_current_user),
 ):
     """Genera o regenera el .docx del informe."""
-    informe = db.query(Informe).filter(Informe.id == informe_id).first()
-    if not informe:
-        raise HTTPException(status_code=404, detail="Informe no encontrado")
+    informe = _informe_o_404(db, informe_id)
+    _puede_editar(db, current_user, informe)
 
     if informe.ruta_docx:
         nombre = regenerar_docx(db, informe)

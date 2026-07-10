@@ -15,6 +15,7 @@ import Asignaciones from './pages/director/Asignaciones'
 import SubirCalificaciones from './pages/director/SubirCalificaciones'
 import Informe1 from './pages/director/Informe1'
 import VerInformes from './pages/director/VerInformes'
+import EditarInforme from './pages/informes/EditarInforme'
 import JefeDashboard from './pages/jefe_area/Dashboard'
 import Informe1Jefe from './pages/jefe_area/Informe1'
 import Informe2 from './pages/jefe_area/Informe2'
@@ -67,6 +68,7 @@ export default function App() {
                 <Route path="calificaciones" element={<SubirCalificaciones />} />
                 <Route path="informe1" element={<Informe1 />} />
                 <Route path="informes" element={<VerInformes />} />
+                <Route path="informes/:id/editar" element={<EditarInforme />} />
               </Routes>
             </AppLayout>
           </ProtectedRoute>
@@ -86,6 +88,8 @@ export default function App() {
                 <Route path="informe2" element={<Informe2 />} />
                 <Route path="informe3" element={<Informe3 />} />
                 <Route path="informe4" element={<Informe4 />} />
+                <Route path="informes" element={<VerInformes />} />
+                <Route path="informes/:id/editar" element={<EditarInforme />} />
               </Routes>
             </AppLayout>
           </ProtectedRoute>

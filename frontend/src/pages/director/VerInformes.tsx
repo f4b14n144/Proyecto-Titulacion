@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
+import { Link } from 'react-router-dom'
 import { renderAsync } from 'docx-preview'
 import api from '../../services/api'
+import { useAuth } from '../../hooks/useAuth'
 import { descargarInforme, obtenerDocxBlob } from '../../services/informes.service'
 import { formatEstado } from '../../utils/formatters'
-import { Eye, Download, X } from 'lucide-react'
+import { Eye, Download, X, Pencil } from 'lucide-react'
 import type { Area, ApiResponse } from '../../types'
 
 interface Informe {
@@ -36,6 +38,9 @@ const ESTADO_COLOR: Record<string, string> = {
 }
 
 export default function VerInformes() {
+  const { user } = useAuth()
+  // La misma pantalla la usan la directora y el jefe; cada panel tiene su prefijo
+  const basePanel = user?.rol === 'JEFE_AREA' ? '/jefe' : '/director'
   const [informes, setInformes] = useState<Informe[]>([])
   const [areas, setAreas] = useState<Area[]>([])
   const [consejos, setConsejos] = useState<Consejo[]>([])
@@ -215,6 +220,12 @@ export default function VerInformes() {
                       >
                         <Eye size={14} /> Ver
                       </button>
+                      <Link
+                        to={`${basePanel}/informes/${inf.id}/editar`}
+                        className="flex items-center gap-1 text-amber-600 hover:underline text-xs"
+                      >
+                        <Pencil size={14} /> Editar
+                      </Link>
                       {inf.ruta_docx ? (
                         <button
                           onClick={() => descargar(inf)}

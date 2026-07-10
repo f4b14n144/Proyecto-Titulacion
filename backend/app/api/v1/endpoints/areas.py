@@ -8,12 +8,15 @@ from app.schemas.area import AreaCreate, AreaUpdate, AreaOut
 router = APIRouter()
 
 _solo_director = require_role("DIRECTOR_CARRERA")
+# La lista de áreas es de lectura compartida: el jefe la usa en sus pantallas
+# de informes. Crear/editar/borrar siguen siendo solo de la dirección.
+_lectura_compartida = require_role("DIRECTOR_CARRERA", "JEFE_AREA")
 
 
 @router.get("/", response_model=dict)
 def listar_areas(
     db: Session = Depends(get_db),
-    _: Usuario = Depends(_solo_director),
+    _: Usuario = Depends(_lectura_compartida),
 ):
     areas = db.query(Area).order_by(Area.nombre).all()
     return {"data": [AreaOut.model_validate(a) for a in areas], "message": "OK", "success": True}
