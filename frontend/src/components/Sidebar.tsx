@@ -3,7 +3,7 @@ import { useAuth } from '../hooks/useAuth'
 import {
   LayoutDashboard, Users, Calendar, Gavel, Layers, BookOpen,
   ClipboardList, Upload, FileText, Files, ClipboardCheck,
-  FileBarChart, MessageSquare, Lightbulb, type LucideIcon,
+  FileBarChart, MessageSquare, Lightbulb, GraduationCap, type LucideIcon,
 } from 'lucide-react'
 
 type Item = { to: string; label: string; icon: LucideIcon; exact?: boolean }
@@ -23,6 +23,7 @@ const directorGroups: Grupo[] = [
     { to: '/director/asignaturas', label: 'Asignaturas', icon: BookOpen },
     { to: '/director/asignaciones', label: 'Asignaciones docente', icon: ClipboardList },
     { to: '/director/calificaciones', label: 'Subir Calificaciones', icon: Upload },
+    { to: '/director/estudiantes', label: 'Estudiantes del período', icon: GraduationCap },
   ]},
   { titulo: 'Informes', items: [
     { to: '/director/informe1', label: 'Informe 1', icon: FileText },

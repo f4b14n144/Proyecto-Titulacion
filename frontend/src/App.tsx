@@ -13,6 +13,7 @@ import Areas from './pages/director/Areas'
 import Asignaturas from './pages/director/Asignaturas'
 import Asignaciones from './pages/director/Asignaciones'
 import SubirCalificaciones from './pages/director/SubirCalificaciones'
+import SubirEstudiantes from './pages/director/SubirEstudiantes'
 import Informe1 from './pages/director/Informe1'
 import VerInformes from './pages/director/VerInformes'
 import EditarInforme from './pages/informes/EditarInforme'
@@ -66,6 +67,7 @@ export default function App() {
                 <Route path="asignaturas" element={<Asignaturas />} />
                 <Route path="asignaciones" element={<Asignaciones />} />
                 <Route path="calificaciones" element={<SubirCalificaciones />} />
+                <Route path="estudiantes" element={<SubirEstudiantes />} />
                 <Route path="informe1" element={<Informe1 />} />
                 <Route path="informes" element={<VerInformes />} />
                 <Route path="informes/:id/editar" element={<EditarInforme />} />
