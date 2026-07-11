@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import api from '../../services/api'
 import { useAuth } from '../../hooks/useAuth'
 import { descargarInforme } from '../../services/informes.service'
+import { Cargando, MensajeError } from '../../components/Estado'
+import { Sparkles } from 'lucide-react'
 import type { ApiResponse } from '../../types'
 
 interface Consejo { id: number; periodo_id: number; fecha_consejo: string }
@@ -9,7 +11,23 @@ interface Periodo { id: number; nombre: string; activo: boolean }
 interface Asignacion { id: number; usuario_id: number; asignatura_id: number; periodo_id: number; grupo: string }
 interface Usuario { id: number; nombre_completo: string }
 interface Asignatura { id: number; nombre: string; area_id: number }
-interface Informe { id: number; tipo_informe: number; contenido_json: Record<string, unknown>; estado: string; ruta_docx: string | null }
+interface Informe {
+  id: number
+  tipo_informe: number
+  contenido_json: Record<string, unknown>
+  estado: string
+  ruta_docx: string | null
+}
+
+/** Un ítem del checklist tal como viaja al backend. */
+interface ItemChecklist {
+  usuario_id: number
+  asignatura_id: number
+  grupo: string
+  observaciones: string
+  acciones_mejora: string
+  [campo: string]: boolean | string | number
+}
 
 const PARAMS_BOOL = [
   { campo: 'silabo_cargado', label: 'Sílabo cargado' },
@@ -26,7 +44,17 @@ const PARAMS_BOOL = [
   { campo: 'proyecto_integrador', label: 'Proyecto integrador de materias' },
 ]
 
-type ChecklistRow = Record<string, boolean | string>
+/** Clave estable de una asignación: la misma que usa el backend. */
+const clave = (asignaturaId: number, grupo: string) => `${asignaturaId}|${grupo}`
+
+const itemVacio = (a: Asignacion): ItemChecklist => ({
+  usuario_id: a.usuario_id,
+  asignatura_id: a.asignatura_id,
+  grupo: a.grupo,
+  observaciones: '',
+  acciones_mejora: '',
+  ...PARAMS_BOOL.reduce((acc, p) => ({ ...acc, [p.campo]: false }), {}),
+})
 
 export default function Informe2() {
   const { user } = useAuth()
@@ -37,7 +65,8 @@ export default function Informe2() {
   const [asignaturas, setAsignaturas] = useState<Asignatura[]>([])
   const [consejoId, setConsejoId] = useState('')
   const [informe, setInforme] = useState<Informe | null>(null)
-  const [checklists, setChecklists] = useState<Record<number, ChecklistRow>>({})
+  const [checklists, setChecklists] = useState<Record<string, ItemChecklist>>({})
+  const [cargando, setCargando] = useState(false)
   const [guardando, setGuardando] = useState(false)
   const [generando, setGenerando] = useState(false)
   const [msg, setMsg] = useState('')
@@ -55,157 +84,253 @@ export default function Informe2() {
     })
   }, [])
 
-  // Auto-seleccionar el último consejo (el más reciente viene primero)
   useEffect(() => {
-    if (consejos.length > 0 && !consejoId) seleccionar(String(consejos[0].id))
+    if (consejos.length > 0 && !consejoId && user?.area_id) seleccionar(String(consejos[0].id))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [consejos])
+  }, [consejos, user])
 
   const seleccionar = async (cId: string) => {
-    setConsejoId(cId)
-    setInforme(null); setChecklists({}); setMsg('')
-    if (!cId) return
+    setConsejoId(cId); setInforme(null); setChecklists({}); setMsg(''); setError('')
+    if (!cId || !user?.area_id) return
     const consejo = consejos.find((c) => c.id === Number(cId))
     if (!consejo) return
-    const asigRes = await api.get<ApiResponse<Asignacion[]>>('/asignaciones/', { params: { periodo_id: consejo.periodo_id } })
-    setAsignaciones(asigRes.data.data)
-    // Inicializar checklists vacíos
-    const init: Record<number, ChecklistRow> = {}
-    asigRes.data.data.forEach((a) => {
-      init[a.id] = PARAMS_BOOL.reduce((acc, p) => ({ ...acc, [p.campo]: false }), { observaciones: '', acciones_mejora: '' })
-    })
-    setChecklists(init)
+
+    setCargando(true)
     try {
+      // Asignaciones del área en el período del consejo
+      const asigRes = await api.get<ApiResponse<Asignacion[]>>('/asignaciones/', {
+        params: { periodo_id: consejo.periodo_id },
+      })
+      const asigs = asigRes.data.data
+      setAsignaciones(asigs)
+
+      // Partir de un checklist vacío…
+      const estado: Record<string, ItemChecklist> = {}
+      asigs.forEach((a) => { estado[clave(a.asignatura_id, a.grupo)] = itemVacio(a) })
+
+      // …y rellenarlo con lo que ya se guardó antes (aquí estaba el bug: nunca se leía)
+      const guardado = await api.get<ApiResponse<{ informe_id: number | null; items: ItemChecklist[] }>>(
+        '/avac/checklist', { params: { consejo_id: cId, area_id: user.area_id } },
+      )
+      guardado.data.data.items.forEach((item) => {
+        const k = clave(item.asignatura_id, item.grupo)
+        if (estado[k]) estado[k] = { ...estado[k], ...item }
+      })
+      setChecklists(estado)
+
       const { data } = await api.get<ApiResponse<Informe[]>>('/informes/', { params: { consejo_id: cId } })
-      const inf = data.data.find((i) => i.tipo_informe === 2) ?? null
-      setInforme(inf)
-    } catch { /* sin informe aún */ }
+      setInforme(data.data.find((i) => i.tipo_informe === 2) ?? null)
+    } catch {
+      setError('No se pudo cargar el checklist.')
+    } finally {
+      setCargando(false)
+    }
   }
 
-  const toggle = (asigId: number, campo: string) => {
-    setChecklists((prev) => ({ ...prev, [asigId]: { ...prev[asigId], [campo]: !prev[asigId][campo] } }))
+  const toggle = (k: string, campo: string) => {
+    setChecklists((prev) => ({ ...prev, [k]: { ...prev[k], [campo]: !prev[k][campo] } }))
   }
 
-  const texto = (asigId: number, campo: string, valor: string) => {
-    setChecklists((prev) => ({ ...prev, [asigId]: { ...prev[asigId], [campo]: valor } }))
+  const texto = (k: string, campo: string, valor: string) => {
+    setChecklists((prev) => ({ ...prev, [k]: { ...prev[k], [campo]: valor } }))
+  }
+
+  const guardar = async (): Promise<number | null> => {
+    if (!consejoId || !user?.area_id) return null
+    setGuardando(true); setError(''); setMsg('')
+    try {
+      const { data } = await api.put<ApiResponse<{ informe_id: number; guardados: number }>>(
+        '/avac/checklist',
+        { consejo_id: Number(consejoId), area_id: user.area_id, items: Object.values(checklists) },
+      )
+      setMsg(data.message)
+      return data.data.informe_id
+    } catch {
+      setError('No se pudo guardar el checklist.')
+      return null
+    } finally {
+      setGuardando(false)
+    }
+  }
+
+  /** Guarda y pide a la IA las acciones de mejora sugeridas. */
+  const generarConIA = async () => {
+    const informeId = await guardar()
+    if (!informeId || !user?.area_id) return
+
+    setGenerando(true); setError(''); setMsg('Generando acciones con IA… puede tardar un minuto.')
+    try {
+      await api.post('/informes/generar-borrador', {
+        consejo_id: Number(consejoId), area_id: user.area_id, tipo_informe: 2,
+      })
+
+      // El borrador se genera en segundo plano: esperar a que aparezcan las acciones
+      for (let intento = 0; intento < 40; intento++) {
+        await new Promise((r) => setTimeout(r, 3000))
+        const { data } = await api.get<ApiResponse<Informe[]>>('/informes/', { params: { consejo_id: consejoId } })
+        const inf = data.data.find((i) => i.tipo_informe === 2) ?? null
+        const items = (inf?.contenido_json?.checklists as Record<string, unknown>[]) ?? []
+        if (items.length > 0 && items.some((it) => String(it.acciones_sugeridas ?? '').trim())) {
+          setInforme(inf)
+          setMsg('Acciones de mejora generadas por la IA.')
+          return
+        }
+      }
+      setError('La generación está tardando más de lo normal. Recarga en unos momentos.')
+    } catch {
+      setError('No se pudieron generar las acciones.')
+    } finally {
+      setGenerando(false)
+    }
+  }
+
+  const generarDocx = async () => {
+    if (!informe) return
+    setGenerando(true); setError('')
+    try {
+      await api.post(`/informes/${informe.id}/generar-docx`)
+      const { data } = await api.get<ApiResponse<Informe[]>>('/informes/', { params: { consejo_id: consejoId } })
+      setInforme(data.data.find((i) => i.tipo_informe === 2) ?? null)
+      setMsg('.docx generado.')
+    } catch { setError('Error al generar el .docx.') } finally { setGenerando(false) }
   }
 
   const nombreUsuario = (id: number) => usuarios.find((u) => u.id === id)?.nombre_completo ?? `#${id}`
   const nombreAsignatura = (id: number) => asignaturas.find((a) => a.id === id)?.nombre ?? `#${id}`
   const nombrePeriodo = (pid: number) => periodos.find((p) => p.id === pid)?.nombre ?? `#${pid}`
 
-  const guardarYGenerar = async () => {
-    if (!consejoId) return
-    setGuardando(true); setError(''); setMsg('')
-    try {
-      // Enviar checklists al backend como secciones del informe
-      const consejo = consejos.find((c) => c.id === Number(consejoId))
-      if (!consejo) return
-
-      let informeActual = informe
-      if (!informeActual) {
-        await api.post('/informes/generar-borrador', { consejo_id: Number(consejoId), area_id: user?.area_id, tipo_informe: 2 })
-        await new Promise((r) => setTimeout(r, 1500))
-        const { data } = await api.get<ApiResponse<Informe[]>>('/informes/', { params: { consejo_id: consejoId } })
-        informeActual = data.data.find((i) => i.tipo_informe === 2) ?? null
-        if (informeActual) setInforme(informeActual)
-      }
-
-      if (informeActual) {
-        const secciones: Record<string, string> = {
-          checklists_json: JSON.stringify(checklists),
-        }
-        await api.put(`/informes/${informeActual.id}/secciones`, { secciones })
-        setMsg('Checklist guardado.')
-      }
-    } catch { setError('Error al guardar.') } finally { setGuardando(false) }
+  /** Acciones que sugirió la IA para una asignatura-grupo. */
+  const accionesIA = (asignaturaId: number, grupo: string): string => {
+    const items = (informe?.contenido_json?.checklists as Record<string, unknown>[]) ?? []
+    const nombre = nombreAsignatura(asignaturaId)
+    const it = items.find((x) => x.asignatura === nombre && x.grupo === grupo)
+    return String(it?.acciones_sugeridas ?? '')
   }
 
-  const generarDocx = async () => {
-    if (!informe) return
-    setGenerando(true)
-    try {
-      await api.post(`/informes/${informe.id}/generar-docx`)
-      const { data } = await api.get<ApiResponse<Informe[]>>('/informes/', { params: { consejo_id: consejoId } })
-      setInforme(data.data.find((i) => i.tipo_informe === 2) ?? null)
-      setMsg('.docx generado.')
-    } catch { setError('Error al generar .docx.') } finally { setGenerando(false) }
-  }
+  // Solo las asignaciones del área del jefe
+  const misAsignaciones = asignaciones.filter((a) => {
+    const asig = asignaturas.find((x) => x.id === a.asignatura_id)
+    return asig?.area_id === user?.area_id
+  })
 
   return (
     <div className="p-6">
       <h1 className="text-2xl font-bold text-gray-800 mb-1">Informe 2 — Revisión AVAC</h1>
-      <p className="text-sm text-gray-500 mb-5">Checklist de parámetros del aula virtual por docente</p>
+      <p className="text-sm text-gray-500 mb-4">
+        Checklist de los 12 parámetros del aula virtual, por docente y asignatura
+      </p>
+
+      <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 mb-5 text-sm text-blue-900">
+        Hay <strong>un solo Informe 2 por período y área</strong>. Lo que marques queda guardado:
+        puedes salir y volver a entrar para seguir completándolo.
+      </div>
 
       <div className="mb-5">
+        <label className="block text-sm font-medium text-gray-700 mb-1">Consejo de Carrera</label>
         <select value={consejoId} onChange={(e) => seleccionar(e.target.value)}
-          className="border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-ups-blue focus:outline-none">
-          <option value="">Seleccionar Consejo de Carrera</option>
+          className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ups-blue w-80">
+          <option value="">Seleccionar consejo</option>
           {consejos.map((c) => (
             <option key={c.id} value={c.id}>{nombrePeriodo(c.periodo_id)} — {c.fecha_consejo}</option>
           ))}
         </select>
       </div>
 
-      {consejoId && asignaciones.length === 0 && (
-        <p className="text-gray-400 text-sm">No hay asignaciones para este período.</p>
-      )}
+      {msg && <p className="text-green-700 text-sm bg-green-50 px-3 py-2 rounded mb-4">{msg}</p>}
+      {error && <MensajeError mensaje={error} />}
 
-      {asignaciones.map((asig) => (
-        <div key={asig.id} className="bg-white rounded-xl border mb-4 overflow-hidden">
-          <div className="bg-gray-50 border-b px-4 py-3 flex items-center gap-3">
-            <span className="font-semibold text-gray-800">{nombreAsignatura(asig.asignatura_id)}</span>
-            <span className="text-gray-500 text-sm">— {nombreUsuario(asig.usuario_id)} — Grupo {asig.grupo}</span>
-          </div>
-          <div className="p-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-4">
-              {PARAMS_BOOL.map(({ campo, label }) => (
-                <label key={campo} className="flex items-center gap-2 cursor-pointer text-sm text-gray-700">
-                  <input type="checkbox" checked={!!checklists[asig.id]?.[campo]}
-                    onChange={() => toggle(asig.id, campo)} className="w-4 h-4 accent-ups-blue" />
-                  {label}
-                </label>
-              ))}
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Observaciones</label>
-                <textarea value={(checklists[asig.id]?.observaciones as string) ?? ''}
-                  onChange={(e) => texto(asig.id, 'observaciones', e.target.value)}
-                  rows={2} className="w-full border rounded px-2 py-1 text-sm focus:ring-1 focus:ring-ups-blue focus:outline-none resize-none" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Acciones de mejora</label>
-                <textarea value={(checklists[asig.id]?.acciones_mejora as string) ?? ''}
-                  onChange={(e) => texto(asig.id, 'acciones_mejora', e.target.value)}
-                  rows={2} className="w-full border rounded px-2 py-1 text-sm focus:ring-1 focus:ring-ups-blue focus:outline-none resize-none" />
-              </div>
-            </div>
-          </div>
-        </div>
-      ))}
+      {cargando ? (
+        <Cargando texto="Cargando checklist…" />
+      ) : (
+        <>
+          {consejoId && misAsignaciones.length === 0 && (
+            <p className="text-gray-400 text-sm">No hay asignaciones en tu área para este período.</p>
+          )}
 
-      {consejoId && asignaciones.length > 0 && (
-        <div className="flex gap-3 mt-4">
-          {msg && <span className="text-green-600 text-sm self-center">{msg}</span>}
-          {error && <span className="text-red-600 text-sm self-center">{error}</span>}
-          <button onClick={guardarYGenerar} disabled={guardando}
-            className="bg-ups-blue text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-blue-800 disabled:opacity-60">
-            {guardando ? 'Guardando...' : 'Guardar checklist'}
-          </button>
-          {informe && (
-            <button onClick={generarDocx} disabled={generando}
-              className="bg-green-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-60">
-              {generando ? 'Generando...' : 'Generar .docx'}
-            </button>
+          {misAsignaciones.map((asig) => {
+            const k = clave(asig.asignatura_id, asig.grupo)
+            const item = checklists[k]
+            if (!item) return null
+            const sugeridas = accionesIA(asig.asignatura_id, asig.grupo)
+
+            return (
+              <div key={k} className="bg-white rounded-xl border mb-4 overflow-hidden">
+                <div className="bg-gray-50 border-b px-4 py-3 flex items-center gap-3 flex-wrap">
+                  <span className="font-semibold text-gray-800">{nombreAsignatura(asig.asignatura_id)}</span>
+                  <span className="text-gray-500 text-sm">
+                    — {nombreUsuario(asig.usuario_id)} — Grupo {asig.grupo}
+                  </span>
+                </div>
+
+                <div className="p-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-4">
+                    {PARAMS_BOOL.map(({ campo, label }) => (
+                      <label key={campo} className="flex items-center gap-2 cursor-pointer text-sm text-gray-700">
+                        <input type="checkbox" checked={Boolean(item[campo])}
+                          onChange={() => toggle(k, campo)} className="w-4 h-4 accent-ups-blue" />
+                        {label}
+                      </label>
+                    ))}
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Observaciones</label>
+                      <textarea value={item.observaciones}
+                        onChange={(e) => texto(k, 'observaciones', e.target.value)}
+                        rows={2}
+                        className="w-full border rounded px-2 py-1 text-sm focus:ring-1 focus:ring-ups-blue focus:outline-none resize-none" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">
+                        Acciones de mejora del jefe de área
+                      </label>
+                      <textarea value={item.acciones_mejora}
+                        onChange={(e) => texto(k, 'acciones_mejora', e.target.value)}
+                        rows={2}
+                        className="w-full border rounded px-2 py-1 text-sm focus:ring-1 focus:ring-ups-blue focus:outline-none resize-none" />
+                    </div>
+                  </div>
+
+                  {sugeridas && (
+                    <div className="mt-3 bg-violet-50 border border-violet-200 rounded-lg p-3">
+                      <p className="flex items-center gap-1.5 text-xs font-semibold text-violet-800 mb-1">
+                        <Sparkles size={13} /> Acciones de mejora sugeridas por la IA
+                      </p>
+                      <p className="text-sm text-violet-900 whitespace-pre-line">{sugeridas}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+
+          {consejoId && misAsignaciones.length > 0 && (
+            <div className="sticky bottom-0 -mx-6 px-6 py-3 bg-white border-t flex gap-3 flex-wrap items-center">
+              <button onClick={guardar} disabled={guardando || generando}
+                className="bg-ups-blue text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-blue-800 disabled:opacity-50">
+                {guardando ? 'Guardando...' : 'Guardar checklist'}
+              </button>
+              <button onClick={generarConIA} disabled={guardando || generando}
+                className="flex items-center gap-2 bg-violet-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-violet-700 disabled:opacity-50">
+                <Sparkles size={15} />
+                {generando ? 'Generando con IA...' : 'Generar acciones con IA'}
+              </button>
+              {informe && (
+                <button onClick={generarDocx} disabled={guardando || generando}
+                  className="bg-green-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50">
+                  Generar .docx
+                </button>
+              )}
+              {informe?.ruta_docx && (
+                <button type="button" onClick={() => descargarInforme(informe.id)}
+                  className="border border-ups-blue text-ups-blue px-5 py-2 rounded-lg text-sm font-medium hover:bg-ups-blue hover:text-white transition">
+                  Descargar .docx
+                </button>
+              )}
+            </div>
           )}
-          {informe?.ruta_docx && (
-            <button type="button" onClick={() => descargarInforme(informe.id)}
-              className="border border-ups-blue text-ups-blue px-5 py-2 rounded-lg text-sm font-medium hover:bg-ups-blue hover:text-white transition">
-              Descargar .docx
-            </button>
-          )}
-        </div>
+        </>
       )}
     </div>
   )
