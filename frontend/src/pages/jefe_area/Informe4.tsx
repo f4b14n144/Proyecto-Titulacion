@@ -77,11 +77,16 @@ export default function Informe4() {
     if (!informe) return
     setGuardando(true); setError('')
     try {
+      // Las ediciones van DENTRO de calificaciones_finales, que es lo que lee la
+      // plantilla del .docx. Antes se guardaban en un campo aparte
+      // (secciones.calificaciones_finales_editadas) que nadie leía: se perdían.
       const cals = (informe.contenido_json?.calificaciones_finales as Record<string, unknown>[]) ?? []
-      const actualizadas = cals.map((c, i) => ({ ...c, ...editando[i] }))
-      await api.put(`/informes/${informe.id}/secciones`, {
-        secciones: { calificaciones_finales_editadas: JSON.stringify(actualizadas) }
-      })
+      const contenido = {
+        ...informe.contenido_json,
+        calificaciones_finales: cals.map((c, i) => ({ ...c, ...editando[i] })),
+      }
+      await api.put(`/informes/${informe.id}/contenido`, { contenido_json: contenido })
+      await seleccionar(consejoId)   // releer para confirmar que quedó guardado
       setMsg('Cambios guardados.')
     } catch { setError('Error al guardar.') } finally { setGuardando(false) }
   }

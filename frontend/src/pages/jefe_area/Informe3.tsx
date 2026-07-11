@@ -11,7 +11,7 @@ interface Consejo { id: number; periodo_id: number; fecha_consejo: string }
 interface Periodo { id: number; nombre: string; activo: boolean }
 interface Asignacion { id: number; usuario_id: number; asignatura_id: number; periodo_id: number; grupo: string }
 interface Usuario { id: number; nombre_completo: string }
-interface Asignatura { id: number; nombre: string }
+interface Asignatura { id: number; nombre: string; area_id: number }
 interface Informe { id: number; tipo_informe: number; contenido_json: Record<string, unknown>; estado: string; ruta_docx: string | null }
 
 const PARAMS_VISITA = [
@@ -23,7 +23,19 @@ const PARAMS_VISITA = [
   { campo: 'actividad_investigacion', label: 'Actividad de investigación' },
 ]
 
-type VisitaRow = Record<string, boolean | string>
+/** Una visita áulica, tal como viaja al backend. */
+interface VisitaRow {
+  usuario_id: number
+  asignatura_id: number
+  grupo: string
+  observaciones_estudiantes: string
+  observaciones_docente: string
+  acciones_docente: string
+  [campo: string]: boolean | string | number
+}
+
+/** Clave estable de una asignación: la misma que usa el backend. */
+const clave = (asignaturaId: number, grupo: string) => `${asignaturaId}|${grupo}`
 
 export default function Informe3() {
   const { user } = useAuth()
@@ -34,7 +46,7 @@ export default function Informe3() {
   const [asignaturas, setAsignaturas] = useState<Asignatura[]>([])
   const [consejoId, setConsejoId] = useState('')
   const [informe, setInforme] = useState<Informe | null>(null)
-  const [visitas, setVisitas] = useState<Record<number, VisitaRow>>({})
+  const [visitas, setVisitas] = useState<Record<string, VisitaRow>>({})
   const [guardando, setGuardando] = useState(false)
   const [generando, setGenerando] = useState(false)
   const [msg, setMsg] = useState('')
@@ -65,51 +77,79 @@ export default function Informe3() {
   }, [consejos])
 
   const seleccionar = async (cId: string) => {
-    setConsejoId(cId); setInforme(null); setVisitas({}); setMsg('')
-    if (!cId) return
+    setConsejoId(cId); setInforme(null); setVisitas({}); setMsg(''); setError('')
+    if (!cId || !user?.area_id) return
     const consejo = consejos.find((c) => c.id === Number(cId))
     if (!consejo) return
-    const asigRes = await api.get<ApiResponse<Asignacion[]>>('/asignaciones/', { params: { periodo_id: consejo.periodo_id } })
-    setAsignaciones(asigRes.data.data)
-    const init: Record<number, VisitaRow> = {}
-    asigRes.data.data.forEach((a) => {
-      init[a.id] = PARAMS_VISITA.reduce((acc, p) => ({ ...acc, [p.campo]: false }), {
-        observaciones_estudiantes: '', observaciones_docente: '', acciones_docente: '',
-      })
-    })
-    setVisitas(init)
+
     try {
+      const asigRes = await api.get<ApiResponse<Asignacion[]>>('/asignaciones/', {
+        params: { periodo_id: consejo.periodo_id },
+      })
+      const asigs = asigRes.data.data
+      setAsignaciones(asigs)
+
+      // Partir de un checklist vacío…
+      const estado: Record<string, VisitaRow> = {}
+      asigs.forEach((a) => {
+        estado[clave(a.asignatura_id, a.grupo)] = {
+          usuario_id: a.usuario_id,
+          asignatura_id: a.asignatura_id,
+          grupo: a.grupo,
+          observaciones_estudiantes: '', observaciones_docente: '', acciones_docente: '',
+          ...PARAMS_VISITA.reduce((acc, p) => ({ ...acc, [p.campo]: false }), {}),
+        }
+      })
+
+      // …y rellenarlo con lo ya guardado (aquí estaba el bug: nunca se leía)
+      const guardado = await api.get<ApiResponse<{ items: VisitaRow[] }>>('/avac/visitas', {
+        params: { consejo_id: cId, area_id: user.area_id },
+      })
+      guardado.data.data.items.forEach((item) => {
+        const k = clave(item.asignatura_id, item.grupo)
+        if (estado[k]) estado[k] = { ...estado[k], ...item }
+      })
+      setVisitas(estado)
+
       const { data } = await api.get<ApiResponse<Informe[]>>('/informes/', { params: { consejo_id: cId } })
       setInforme(data.data.find((i) => i.tipo_informe === 3) ?? null)
-    } catch { /* sin informe */ }
+    } catch {
+      setError('No se pudo cargar el checklist de visitas.')
+    }
   }
 
-  const toggle = (id: number, campo: string) =>
-    setVisitas((prev) => ({ ...prev, [id]: { ...prev[id], [campo]: !prev[id][campo] } }))
+  const toggle = (k: string, campo: string) =>
+    setVisitas((prev) => ({ ...prev, [k]: { ...prev[k], [campo]: !prev[k][campo] } }))
 
-  const texto = (id: number, campo: string, val: string) =>
-    setVisitas((prev) => ({ ...prev, [id]: { ...prev[id], [campo]: val } }))
+  const texto = (k: string, campo: string, val: string) =>
+    setVisitas((prev) => ({ ...prev, [k]: { ...prev[k], [campo]: val } }))
 
   const nombreU = (id: number) => usuarios.find((u) => u.id === id)?.nombre_completo ?? `#${id}`
   const nombreA = (id: number) => asignaturas.find((a) => a.id === id)?.nombre ?? `#${id}`
   const nombreP = (pid: number) => periodos.find((p) => p.id === pid)?.nombre ?? `#${pid}`
 
+  // Solo las asignaciones del área del jefe (antes se listaban las de todas las áreas)
+  const misAsignaciones = asignaciones.filter((a) => {
+    const asig = asignaturas.find((x) => x.id === a.asignatura_id)
+    return asig?.area_id === user?.area_id
+  })
+
   const guardar = async () => {
+    if (!consejoId || !user?.area_id) return
     setGuardando(true); setError(''); setMsg('')
     try {
-      let inf = informe
-      if (!inf) {
-        await api.post('/informes/generar-borrador', { consejo_id: Number(consejoId), area_id: user?.area_id, tipo_informe: 3 })
-        await new Promise((r) => setTimeout(r, 1500))
-        const { data } = await api.get<ApiResponse<Informe[]>>('/informes/', { params: { consejo_id: consejoId } })
-        inf = data.data.find((i) => i.tipo_informe === 3) ?? null
-        if (inf) setInforme(inf)
+      const { data } = await api.put<ApiResponse<{ informe_id: number; guardados: number }>>(
+        '/avac/visitas',
+        { consejo_id: Number(consejoId), area_id: user.area_id, items: Object.values(visitas) },
+      )
+      setMsg(data.message)
+      if (!informe) {
+        const res = await api.get<ApiResponse<Informe[]>>('/informes/', { params: { consejo_id: consejoId } })
+        setInforme(res.data.data.find((i) => i.tipo_informe === 3) ?? null)
       }
-      if (inf) {
-        await api.put(`/informes/${inf.id}/secciones`, { secciones: { visitas_json: JSON.stringify(visitas) } })
-        setMsg('Visitas guardadas.')
-      }
-    } catch { setError('Error al guardar.') } finally { setGuardando(false) }
+    } catch {
+      setError('No se pudieron guardar las visitas.')
+    } finally { setGuardando(false) }
   }
 
   const generarDocx = async () => {
@@ -147,11 +187,13 @@ export default function Informe3() {
       </div>
 
       {/* PARTE A */}
-      {asignaciones.length > 0 && (
+      {misAsignaciones.length > 0 && (
         <div className="mb-8">
           <h2 className="font-semibold text-gray-700 mb-3">Parte A — Checklist de Visita Áulica</h2>
-          {asignaciones.map((asig) => (
-            <div key={asig.id} className="bg-white rounded-xl border mb-3 overflow-hidden">
+          {misAsignaciones.map((asig) => {
+            const k = clave(asig.asignatura_id, asig.grupo)
+            return (
+            <div key={k} className="bg-white rounded-xl border mb-3 overflow-hidden">
               <div className="bg-gray-50 border-b px-4 py-2 text-sm font-medium text-gray-700">
                 {nombreA(asig.asignatura_id)} — {nombreU(asig.usuario_id)} — Grupo {asig.grupo}
               </div>
@@ -159,8 +201,8 @@ export default function Informe3() {
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-3">
                   {PARAMS_VISITA.map(({ campo, label }) => (
                     <label key={campo} className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                      <input type="checkbox" checked={!!visitas[asig.id]?.[campo]}
-                        onChange={() => toggle(asig.id, campo)} className="w-4 h-4 accent-ups-blue" />
+                      <input type="checkbox" checked={!!visitas[k]?.[campo]}
+                        onChange={() => toggle(k, campo)} className="w-4 h-4 accent-ups-blue" />
                       {label}
                     </label>
                   ))}
@@ -172,14 +214,15 @@ export default function Informe3() {
                 ].map(({ campo, label }) => (
                   <div key={campo} className="mb-2">
                     <label className="block text-xs text-gray-500 mb-0.5">{label}</label>
-                    <textarea value={(visitas[asig.id]?.[campo] as string) ?? ''}
-                      onChange={(e) => texto(asig.id, campo, e.target.value)}
+                    <textarea value={(visitas[k]?.[campo] as string) ?? ''}
+                      onChange={(e) => texto(k, campo, e.target.value)}
                       rows={2} className="w-full border rounded px-2 py-1 text-sm focus:ring-1 focus:ring-ups-blue focus:outline-none resize-none" />
                   </div>
                 ))}
               </div>
             </div>
-          ))}
+            )
+          })}
         </div>
       )}
 

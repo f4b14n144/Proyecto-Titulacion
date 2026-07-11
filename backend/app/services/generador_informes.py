@@ -74,6 +74,26 @@ def _asignaturas_del_area(db: Session, area_id: int, periodo_id: int) -> list[As
     )
 
 
+def _o_vacio(texto: str | None, mensaje: str) -> str:
+    """
+    Texto del informe, o un mensaje explícito si está vacío.
+
+    En un documento institucional un campo en blanco es ambiguo: no se sabe si no
+    hubo nada que decir o si alguien se olvidó de llenarlo. Se deja constancia.
+    """
+    return texto.strip() if texto and texto.strip() else mensaje
+
+
+# Mensajes para los campos que quedan sin llenar
+SIN_OBS_ESTUDIANTES = "No se registraron observaciones de los estudiantes."
+SIN_OBS_DOCENTE = "No se registraron observaciones del docente."
+SIN_OBS_MATERIA = "El docente no registró observaciones sobre la materia."
+SIN_ACCIONES_DOCENTE = "El docente no propuso acciones de mejora."
+SIN_ACCIONES_JEFE = "El jefe de área no registró acciones de mejora."
+SIN_OBSERVACIONES = "No se registraron observaciones."
+SIN_ANALISIS = "Análisis pendiente de generar."
+
+
 def _aportes_materia(
     db: Session, consejo_id: int, asignatura_id: int, grupo: str
 ) -> dict[str, str]:
@@ -95,17 +115,17 @@ def _aportes_materia(
         .all()
     )
 
-    def _juntar(tipo: str) -> str:
+    def _juntar(tipo: str, si_vacio: str) -> str:
         textos = [a.texto for a in aportes if a.tipo == tipo]
         if not textos:
-            return ""
+            return si_vacio
         if len(textos) == 1:
             return textos[0]
         return "\n".join(f"• {t}" for t in textos)
 
     return {
-        "observaciones_materia": _juntar("OBSERVACION"),
-        "acciones_mejora_docente": _juntar("ACCION_MEJORA"),
+        "observaciones_materia": _juntar("OBSERVACION", SIN_OBS_MATERIA),
+        "acciones_mejora_docente": _juntar("ACCION_MEJORA", SIN_ACCIONES_DOCENTE),
     }
 
 
@@ -355,9 +375,9 @@ def generar_informe_2(db: Session, consejo_id: int, area_id: int) -> Informe:
             "docente": docente,
             "asignatura": nombre_asig,
             "grupo": c.grupo,
-            "observaciones": c.observaciones or "",
+            "observaciones": _o_vacio(c.observaciones, SIN_OBSERVACIONES),
             # Lo que escribió el jefe de área
-            "acciones_mejora": c.acciones_mejora or "",
+            "acciones_mejora": _o_vacio(c.acciones_mejora, SIN_ACCIONES_JEFE),
             # Lo que sugiere la IA a partir de los checks incumplidos + observaciones
             "acciones_sugeridas": ia_engine.sugerir_acciones_avac(
                 docente=docente,
@@ -433,9 +453,9 @@ def generar_informe_3(db: Session, consejo_id: int, area_id: int) -> Informe:
             "cumplimiento_practicas": v.cumplimiento_practicas,
             "actividades_con_rubrica": v.actividades_con_rubrica,
             "actividad_investigacion": v.actividad_investigacion,
-            "observaciones_estudiantes": v.observaciones_estudiantes or "",
-            "observaciones_docente": v.observaciones_docente or "",
-            "acciones_docente": v.acciones_docente or "",
+            "observaciones_estudiantes": _o_vacio(v.observaciones_estudiantes, SIN_OBS_ESTUDIANTES),
+            "observaciones_docente": _o_vacio(v.observaciones_docente, SIN_OBS_DOCENTE),
+            "acciones_docente": _o_vacio(v.acciones_docente, SIN_ACCIONES_JEFE),
         })
 
     # Parte B: calificaciones interciclo

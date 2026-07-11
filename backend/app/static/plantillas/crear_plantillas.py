@@ -389,14 +389,13 @@ def crear_informe_2():
         _celda(fila.cells[0], nombre)
         _celda(fila.cells[1], f"{{{{ 'Sí' if item.{campo} else 'No' }}}}")
     doc.add_paragraph()
-    doc.add_paragraph("{%p if item.observaciones %}")
+    # Sin `if`: el generador nunca deja estos campos vacíos. Cuando no hay nada
+    # escrito pone un texto explícito ("No se registraron observaciones."), para que
+    # el informe no tenga huecos en blanco que se confundan con un olvido.
     doc.add_heading("Observaciones", level=3)
     doc.add_paragraph("{{ item.observaciones }}")
-    doc.add_paragraph("{%p endif %}")
-    doc.add_paragraph("{%p if item.acciones_mejora %}")
     doc.add_heading("Acciones de mejora del jefe de área", level=3)
     doc.add_paragraph("{{ item.acciones_mejora }}")
-    doc.add_paragraph("{%p endif %}")
     # Generadas por IA a partir de los parámetros incumplidos y las observaciones
     doc.add_heading("Acciones de mejora sugeridas", level=3)
     doc.add_paragraph("{{ item.acciones_sugeridas }}")
@@ -476,15 +475,12 @@ def crear_informe_3():
 
     doc.add_paragraph("Análisis narrativo: {{ c.analisis_narrativo }}")
     doc.add_paragraph("Acciones de mejora: {{ c.acciones_mejora }}")
-    # Aportes registrados por el docente sobre la materia (sumativos)
-    doc.add_paragraph("{%p if c.observaciones_materia %}")
+    # Aportes registrados por el docente sobre la materia (sumativos).
+    # Sin `if`: si no registró nada, el generador pone un texto explícito.
     doc.add_heading("Observaciones del Docente a la Materia", level=3)
     doc.add_paragraph("{{ c.observaciones_materia }}")
-    doc.add_paragraph("{%p endif %}")
-    doc.add_paragraph("{%p if c.acciones_mejora_docente %}")
     doc.add_heading("Acciones de Mejora propuestas por el Docente", level=3)
     doc.add_paragraph("{{ c.acciones_mejora_docente }}")
-    doc.add_paragraph("{%p endif %}")
     doc.add_paragraph("{% endfor %}")
 
     _firmas(doc, [
@@ -529,15 +525,12 @@ def crear_informe_4():
     doc.add_heading("Acciones de mejora sugeridas", level=3)
     doc.add_paragraph("{{ c.acciones_mejora }}")
 
-    # Aportes registrados por el docente sobre la materia (sumativos)
-    doc.add_paragraph("{%p if c.observaciones_materia %}")
+    # Aportes registrados por el docente sobre la materia (sumativos).
+    # Sin `if`: si no registró nada, el generador pone un texto explícito.
     doc.add_heading("Observaciones del Docente a la Materia", level=3)
     doc.add_paragraph("{{ c.observaciones_materia }}")
-    doc.add_paragraph("{%p endif %}")
-    doc.add_paragraph("{%p if c.acciones_mejora_docente %}")
     doc.add_heading("Acciones de Mejora propuestas por el Docente", level=3)
     doc.add_paragraph("{{ c.acciones_mejora_docente }}")
-    doc.add_paragraph("{%p endif %}")
     doc.add_paragraph()
     doc.add_paragraph("{% endfor %}")
 
