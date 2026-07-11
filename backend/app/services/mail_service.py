@@ -18,14 +18,17 @@ from loguru import logger
 from sqlalchemy.orm import Session
 from app.core.config import settings
 
-# Logo institucional que se incrusta en el encabezado de los correos
+# Logo institucional que se incrusta en los correos (imagen inline por Content-ID)
 _LOGO_PATH = Path(__file__).parent.parent / "static" / "logo-ups.jpg"
 
-# Cabecera HTML con el logo (referencia la imagen inline por Content-ID)
-_ENCABEZADO_LOGO = (
-    '<div style="text-align:center;margin-bottom:12px">'
-    '<img src="cid:logo_ups" alt="UPS" style="max-height:70px">'
-    '</div>'
+# Pie institucional con el logo, para los correos que no lo colocan ellos mismos.
+# Las plantillas de `plantillas_correo` sí lo hacen: lo ponen junto a la firma, que
+# es donde corresponde. Si el cuerpo ya referencia el logo, no se añade otro.
+_REFERENCIA_LOGO = "cid:logo_ups"
+_PIE_LOGO = (
+    '<div style="margin-top:16px;padding-top:12px;border-top:1px solid #d9d9d9;text-align:right">'
+    '<img src="cid:logo_ups" alt="Universidad Politécnica Salesiana" style="height:52px">'
+    "</div>"
 )
 
 
@@ -73,9 +76,10 @@ def enviar_email(
     if reply_to:
         msg["Reply-To"] = reply_to
 
-    # Anteponer el encabezado con el logo si la imagen existe
-    if _LOGO_PATH.exists():
-        cuerpo_html = _ENCABEZADO_LOGO + cuerpo_html
+    # El logo va al PIE. Si la plantilla ya lo coloca (junto a la firma), se respeta;
+    # si no, se añade un pie institucional para no dejar el correo sin identidad.
+    if _LOGO_PATH.exists() and _REFERENCIA_LOGO not in cuerpo_html:
+        cuerpo_html = cuerpo_html + _PIE_LOGO
     msg.attach(MIMEText(cuerpo_html, "html", "utf-8"))
 
     # Adjuntar el logo como imagen inline (Content-ID: logo_ups)

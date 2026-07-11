@@ -33,16 +33,24 @@ router = APIRouter()
 _director_o_jefe = require_role("DIRECTOR_CARRERA", "JEFE_AREA")
 
 
-class EnvioDocentesIn(BaseModel):
+class EnvioBase(BaseModel):
+    modo_prueba: bool = True
+    # Red de seguridad para probar el formato: si se indica, TODOS los correos se
+    # envían a esa dirección en vez de a los destinatarios reales. El destinatario
+    # original queda anotado en el asunto.
+    redirigir_a: Optional[str] = None
+    # Tope de correos a preparar/enviar (útil al probar: evita mandar decenas).
+    limite: Optional[int] = None
+
+
+class EnvioDocentesIn(EnvioBase):
     consejo_id: int
     area_id: Optional[int] = None
-    modo_prueba: bool = True
 
 
-class EnvioEstudiantesIn(BaseModel):
+class EnvioEstudiantesIn(EnvioBase):
     periodo_id: int
     asignatura_id: Optional[int] = None
-    modo_prueba: bool = True
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -103,17 +111,42 @@ def _despachar(correos: list[dict]) -> None:
     logger.info(f"Tanda de correos terminada: {enviados} enviados, {fallidos} fallidos")
 
 
-def _respuesta(correos: list[dict], modo_prueba: bool, tareas: BackgroundTasks) -> dict:
-    if modo_prueba:
+def _aplicar_opciones(correos: list[dict], cfg: EnvioBase) -> list[dict]:
+    """Aplica el tope y la redirección de prueba antes de enviar nada."""
+    if cfg.limite is not None:
+        correos = correos[: max(cfg.limite, 0)]
+
+    if cfg.redirigir_a:
+        redirigidos = []
+        for c in correos:
+            copia = dict(c)
+            copia["destinatario_real"] = c["destinatario"]
+            copia["destinatario"] = cfg.redirigir_a
+            copia["asunto"] = f"[PRUEBA · para {c['destinatario']}] {c['asunto']}"
+            redirigidos.append(copia)
+        correos = redirigidos
+    return correos
+
+
+def _respuesta(correos: list[dict], cfg: EnvioBase, tareas: BackgroundTasks) -> dict:
+    correos = _aplicar_opciones(correos, cfg)
+
+    if cfg.modo_prueba:
         return {
             "data": {"modo_prueba": True, "total": len(correos), "correos": correos},
             "message": f"{len(correos)} correo(s) preparados. No se envió ninguno.",
             "success": True,
         }
+
     tareas.add_task(_despachar, correos)
+    destino = f" (redirigidos a {cfg.redirigir_a})" if cfg.redirigir_a else ""
     return {
-        "data": {"modo_prueba": False, "total": len(correos)},
-        "message": f"Enviando {len(correos)} correo(s) en segundo plano.",
+        "data": {
+            "modo_prueba": False,
+            "total": len(correos),
+            "redirigido_a": cfg.redirigir_a,
+        },
+        "message": f"Enviando {len(correos)} correo(s) en segundo plano{destino}.",
         "success": True,
     }
 
@@ -153,7 +186,7 @@ def correos_a_docentes(
             "cuerpo_html": cuerpo,
         })
 
-    return _respuesta(correos, payload.modo_prueba, tareas)
+    return _respuesta(correos, payload, tareas)
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -191,7 +224,7 @@ def correos_visitas_aulicas(
             "cuerpo_html": cuerpo,
         })
 
-    return _respuesta(correos, payload.modo_prueba, tareas)
+    return _respuesta(correos, payload, tareas)
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -248,7 +281,7 @@ def correos_a_estudiantes(
                 "cuerpo_html": cuerpo,
             })
 
-    respuesta = _respuesta(correos, payload.modo_prueba, tareas)
+    respuesta = _respuesta(correos, payload, tareas)
     if sin_docente:
         respuesta["data"]["materias_sin_docente"] = sin_docente
         respuesta["message"] += (

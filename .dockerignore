@@ -1,0 +1,36 @@
+# Lo que NO debe entrar en el contexto de build de Docker.
+
+# node_modules del host: si se copia encima del que instala `npm ci`, lo corrompe
+# (el build fallaba con "Cannot find module '../lib/tsc.js'"). Además pesa mucho.
+**/node_modules
+**/dist
+**/.vite
+
+# Secretos: que no acaben dentro de una imagen
+.env
+*.env.local
+
+# Datos institucionales (nombres, cédulas y notas de estudiantes reales)
+*.xlsx
+
+# Artefactos generados en tiempo de ejecución
+backend/app/static/docx/
+backend/app/static/graficos/
+
+# Python
+**/__pycache__
+**/*.pyc
+.venv/
+venv/
+
+# Documentos de trabajo local
+CLAUDE.md
+docs/
+.claude/
+prompt_claude_code_COMPLETO.txt
+
+# Git e IDE
+.git
+.gitignore
+.vscode/
+.idea/

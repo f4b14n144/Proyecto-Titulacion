@@ -298,6 +298,54 @@ Los informes 2, 3 y 4 se generan **por área**; el informe 1 es a nivel de carre
 
 ---
 
+## Despliegue en producción
+
+El `docker-compose.yml` de la raíz es para **desarrollo**: corre el servidor de Vite
+con recarga en caliente, publica los puertos de la base de datos y del backend, y
+expone la documentación de la API. **No debe usarse en producción.**
+
+Para producción existe `docker-compose.prod.yml`:
+
+```bash
+# 1. Preparar el .env de producción
+cp .env.example .env
+#    - SECRET_KEY: obligatorio, generar con `openssl rand -hex 32`
+#    - POSTGRES_PASSWORD: una contraseña fuerte (no "password")
+#    - ENVIRONMENT=production
+#    - CORS_ORIGINS: el dominio real (https://informes.ups.edu.ec)
+#    - SMTP_*: una cuenta institucional, no personal
+
+# 2. Levantar
+docker compose -f docker-compose.prod.yml up -d --build
+
+# 3. Migraciones, plantillas y datos iniciales
+docker compose -f docker-compose.prod.yml exec backend alembic upgrade head
+docker compose -f docker-compose.prod.yml exec backend python app/static/plantillas/crear_plantillas.py
+docker compose -f docker-compose.prod.yml exec backend python -m app.db.seed
+```
+
+### Qué cambia respecto a desarrollo
+
+| | Desarrollo | Producción |
+|---|---|---|
+| Frontend | Servidor de Vite (`npm run dev`) | **Build estático** servido por nginx |
+| Puertos publicados | 80, 8000 (API), 5173 (Vite), 5432 (BD) | **Solo el 80** |
+| `/docs` y `/redoc` | Visibles | **404** |
+| Descarga de `.docx` | — | Solo por la API, con JWT |
+| Backend | `--reload` | Sin reload, 1 worker |
+| Secretos | Valores por defecto | **Obligatorios**: el backend no arranca con una `SECRET_KEY` de ejemplo |
+
+> **Un solo worker, a propósito.** El planificador (APScheduler) va embebido en
+> FastAPI. Con varios workers arrancaría una vez por worker y los correos
+> programados se enviarían duplicados. Para escalar habría que sacar el
+> planificador a un proceso aparte.
+
+> **Los informes nunca se sirven como archivos estáticos.** Contienen notas de
+> estudiantes; se descargan por `GET /api/v1/informes/{id}/descargar`, que valida el
+> JWT y el rol del usuario.
+
+---
+
 ## Comandos útiles
 
 ```bash

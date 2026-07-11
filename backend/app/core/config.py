@@ -33,5 +33,17 @@ class Settings(BaseSettings):
     APP_NAME: str = "Sistema Informes UPS"
     ENVIRONMENT: str = "development"
 
+    # Orígenes permitidos por CORS, separados por comas.
+    # En producción hay que poner el dominio real (p. ej. https://informes.ups.edu.ec).
+    CORS_ORIGINS: str = "http://localhost:5173,http://localhost"
+
+    @property
+    def es_produccion(self) -> bool:
+        return self.ENVIRONMENT.lower() == "production"
+
+    @property
+    def origenes_cors(self) -> list[str]:
+        return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
+
 
 settings = Settings()

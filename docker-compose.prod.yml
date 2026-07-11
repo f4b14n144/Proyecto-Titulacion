@@ -1,0 +1,68 @@
+# Despliegue de PRODUCCIÓN.
+#
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Diferencias con el compose de desarrollo:
+#   - El frontend se compila a estáticos y lo sirve nginx (no el servidor de Vite).
+#   - Los .docx NO se publican como archivos estáticos: se descargan por la API,
+#     que valida el JWT y el rol. En desarrollo estaban expuestos sin autenticación.
+#   - Postgres y el backend no publican puertos al exterior: solo nginx (80).
+#   - El backend corre sin --reload y con varios workers.
+#   - Las credenciales son obligatorias: si falta una variable, el arranque falla.
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      # Sin valores por defecto: en producción deben venir del .env
+      POSTGRES_USER: ${POSTGRES_USER:?falta POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?falta POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:?falta POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # Sin `ports`: la base de datos no se expone fuera de la red de Docker.
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: always
+    env_file: .env
+    environment:
+      ENVIRONMENT: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      # Solo los datos generados. El código va dentro de la imagen, no montado.
+      - docx_files:/app/app/static/docx
+      - graficos_files:/app/app/static/graficos
+    # Sin --reload.
+    #
+    # UN SOLO WORKER, a propósito: APScheduler va embebido en FastAPI. Con varios
+    # workers el scheduler arrancaría una vez por worker y los envíos programados
+    # se duplicarían (un correo por worker). Para escalar habría que sacar el
+    # scheduler a un proceso aparte.
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1
+    # Sin `ports`: solo nginx habla con el backend.
+
+  web:
+    build:
+      context: .                    # la raíz: necesita frontend/ y nginx/
+      dockerfile: nginx/Dockerfile
+    restart: always
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+
+volumes:
+  postgres_data:
+  docx_files:
+  graficos_files:

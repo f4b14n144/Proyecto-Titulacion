@@ -4,13 +4,15 @@ Plantillas de los correos institucionales.
 El texto es el entregado por la dirección de carrera y no debe alterarse: solo se
 sustituyen los datos personalizados (docente, estudiante, materia, remitente).
 
-Cada función devuelve `(asunto, cuerpo_html)`. El logo de la universidad lo
-antepone `mail_service.enviar_email` como imagen inline.
+Cada función devuelve `(asunto, cuerpo_html)`. El logo de la universidad va en el
+**pie institucional**, junto a la firma; se referencia por Content-ID y lo adjunta
+`mail_service.enviar_email` como imagen inline.
 """
 from html import escape
 
-_ESTILO_P = 'style="margin:0 0 12px 0;line-height:1.5;font-family:Calibri,Arial,sans-serif;font-size:14px;color:#333"'
-_ESTILO_UL = 'style="margin:0 0 12px 20px;line-height:1.5;font-family:Calibri,Arial,sans-serif;font-size:14px;color:#333"'
+_TEXTO = "line-height:1.5;font-family:Calibri,Arial,sans-serif;font-size:14px;color:#333"
+_ESTILO_P = f'style="margin:0 0 12px 0;{_TEXTO}"'
+_ESTILO_UL = f'style="margin:0 0 12px 20px;{_TEXTO}"'
 
 UNIVERSIDAD = "Universidad Politécnica Salesiana"
 CARRERA = "Carrera de Ciencias de la Computación"
@@ -35,14 +37,36 @@ def _tratamiento(titulo_docente: str) -> str:
 
 
 def _firma(remitente_nombre: str, remitente_cargo: str) -> str:
+    """
+    Pie institucional: la firma a la izquierda y el logo de la universidad a la
+    derecha, separados del cuerpo por una línea.
+
+    Se usa una tabla porque es la única forma fiable de alinear dos bloques en
+    los clientes de correo (Outlook no soporta flexbox). El logo se referencia
+    por Content-ID; lo adjunta `mail_service.enviar_email`.
+    """
+    firma_texto = (
+        f"<strong>{escape(remitente_nombre)}</strong><br>"
+        f"{escape(remitente_cargo)}<br>"
+        f"{CARRERA}<br>"
+        f"{UNIVERSIDAD}"
+    )
     return (
         _p("Atentamente,")
-        + _p(
-            f"<strong>{escape(remitente_nombre)}</strong><br>"
-            f"{escape(remitente_cargo)}<br>"
-            f"{CARRERA}<br>"
-            f"{UNIVERSIDAD}"
-        )
+        + f"""
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0"
+               style="width:100%;max-width:620px;margin-top:14px;border-top:1px solid #d9d9d9">
+          <tr>
+            <td style="padding-top:12px;vertical-align:middle;{_TEXTO}">
+              {firma_texto}
+            </td>
+            <td style="padding-top:12px;vertical-align:middle;text-align:right;width:190px">
+              <img src="cid:logo_ups" alt="{UNIVERSIDAD}"
+                   style="height:52px;display:block;margin-left:auto">
+            </td>
+          </tr>
+        </table>
+        """
     )
 
 
