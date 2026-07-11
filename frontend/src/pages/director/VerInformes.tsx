@@ -4,6 +4,8 @@ import { renderAsync } from 'docx-preview'
 import api from '../../services/api'
 import { useAuth } from '../../hooks/useAuth'
 import { descargarInforme, obtenerDocxBlob } from '../../services/informes.service'
+import TablaScroll from '../../components/TablaScroll'
+import { Cargando, MensajeError, Vacio } from '../../components/Estado'
 import { formatEstado } from '../../utils/formatters'
 import { Eye, Download, X, Pencil } from 'lucide-react'
 import type { Area, ApiResponse } from '../../types'
@@ -174,34 +176,30 @@ export default function VerInformes() {
         <span className="text-sm text-gray-400 self-center">{informes.length} informe(s)</span>
       </div>
 
-      {error && <div className="bg-red-50 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm">{error}</div>}
+      {error && <MensajeError mensaje={error} onReintentar={cargar} />}
 
       {cargando ? (
-        <div className="flex justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-ups-blue" />
-        </div>
+        <Cargando texto="Cargando informes…" />
       ) : informes.length === 0 ? (
-        <div className="bg-white rounded-xl border p-10 text-center text-gray-400 text-sm">
-          No hay informes generados todavía. Los informes se generan desde el panel del
-          jefe de área (Informes 2, 3 y 4) o al activarse el flujo del Consejo.
-        </div>
+        <Vacio mensaje="No hay informes generados todavía. Los informes se generan desde el panel del jefe de área (Informes 2, 3 y 4) o al activarse el flujo del Consejo." />
       ) : (
-        <div className="bg-white rounded-xl border overflow-hidden">
-          <table className="w-full text-sm">
+        <TablaScroll anchoMinimo="60rem">
+          <table className="w-full text-sm whitespace-nowrap">
             <thead className="bg-gray-50 border-b">
               <tr>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Informe</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Área</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Jefe de Área</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Período</th>
+                {/* Estado y versión van juntos: una columna menos que cabe en pantallas angostas */}
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Estado</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Versión</th>
-                <th className="px-4 py-3" />
+                {/* Fija a la derecha: las acciones deben verse aunque la tabla haga scroll */}
+                <th className="px-4 py-3 sticky right-0 bg-gray-50 border-l" />
               </tr>
             </thead>
             <tbody className="divide-y">
               {informes.map((inf) => (
-                <tr key={inf.id} className="hover:bg-gray-50">
+                <tr key={inf.id} className="group hover:bg-gray-50">
                   <td className="px-4 py-3 font-medium text-gray-800">{TIPO_LABEL[inf.tipo_informe] ?? `Informe ${inf.tipo_informe}`}</td>
                   <td className="px-4 py-3 text-gray-600">{inf.area_nombre ?? nombreArea(inf.area_id)}</td>
                   <td className="px-4 py-3 text-gray-500">{inf.jefe_nombre ?? '—'}</td>
@@ -210,9 +208,9 @@ export default function VerInformes() {
                     <span className={`px-2 py-0.5 rounded text-xs font-medium ${ESTADO_COLOR[inf.estado] ?? 'bg-gray-100 text-gray-500'}`}>
                       {formatEstado(inf.estado)}
                     </span>
+                    <span className="text-gray-400 text-xs ml-2">v{inf.version}</span>
                   </td>
-                  <td className="px-4 py-3 text-gray-400 text-xs">v{inf.version}</td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="px-4 py-3 text-right sticky right-0 bg-white border-l group-hover:bg-gray-50">
                     <div className="flex items-center justify-end gap-3">
                       <button
                         onClick={() => verPreview(inf)}
@@ -243,7 +241,7 @@ export default function VerInformes() {
               ))}
             </tbody>
           </table>
-        </div>
+        </TablaScroll>
       )}
 
       {/* Modal de vista previa */}

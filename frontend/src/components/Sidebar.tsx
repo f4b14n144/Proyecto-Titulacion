@@ -1,9 +1,11 @@
+import { useState, useEffect } from 'react'
 import { NavLink } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import {
   LayoutDashboard, Users, Calendar, Gavel, Layers, BookOpen,
   ClipboardList, Upload, FileText, Files, ClipboardCheck,
-  FileBarChart, MessageSquare, Lightbulb, GraduationCap, Mail, type LucideIcon,
+  FileBarChart, MessageSquare, Lightbulb, GraduationCap, Mail,
+  PanelLeftClose, PanelLeftOpen, type LucideIcon,
 } from 'lucide-react'
 
 type Item = { to: string; label: string; icon: LucideIcon; exact?: boolean }
@@ -60,37 +62,79 @@ const docenteGroups: Grupo[] = [
   ]},
 ]
 
-const linkClass = ({ isActive }: { isActive: boolean }) =>
-  `flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition ${
+const linkClass = (colapsado: boolean) => ({ isActive }: { isActive: boolean }) =>
+  `flex items-center gap-2.5 py-2 rounded-lg text-sm transition ${
+    colapsado ? 'px-2.5 justify-center' : 'px-3'
+  } ${
     isActive
       ? 'bg-ups-blue text-white font-medium shadow-sm'
       : 'text-gray-700 hover:bg-gray-100'
   }`
 
+const CLAVE_COLAPSADO = 'sidebar_colapsado'
+
 export default function Sidebar() {
   const { user } = useAuth()
+  // Colapsable para recuperar ancho en monitores de baja resolución.
+  // La preferencia se recuerda entre sesiones; si no hay ninguna guardada,
+  // arranca colapsado en pantallas estrechas.
+  const [colapsado, setColapsado] = useState(() => {
+    const guardado = localStorage.getItem(CLAVE_COLAPSADO)
+    if (guardado !== null) return guardado === '1'
+    // En monitores de baja resolución (1366x768 y similares) el menú expandido
+    // se come 240px que las tablas necesitan. Arranca colapsado; el usuario puede
+    // expandirlo y su preferencia queda guardada.
+    return window.innerWidth < 1440
+  })
+
+  useEffect(() => {
+    localStorage.setItem(CLAVE_COLAPSADO, colapsado ? '1' : '0')
+  }, [colapsado])
+
   const grupos =
     user?.rol === 'DIRECTOR_CARRERA' ? directorGroups
     : user?.rol === 'JEFE_AREA' ? jefeGroups
     : docenteGroups
 
   return (
-    <aside className="w-60 bg-white border-r h-full flex-shrink-0 py-4 overflow-y-auto">
+    <aside
+      className={`bg-white border-r h-full flex-shrink-0 py-4 overflow-y-auto overflow-x-hidden
+                  transition-[width] duration-200 ${colapsado ? 'w-16' : 'w-60'}`}
+    >
+      <div className={`px-3 mb-2 flex ${colapsado ? 'justify-center' : 'justify-end'}`}>
+        <button
+          type="button"
+          onClick={() => setColapsado(!colapsado)}
+          title={colapsado ? 'Expandir menú' : 'Contraer menú'}
+          aria-label={colapsado ? 'Expandir menú' : 'Contraer menú'}
+          className="text-gray-400 hover:text-ups-blue hover:bg-gray-100 rounded-lg p-1.5 transition"
+        >
+          {colapsado ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+        </button>
+      </div>
+
       <nav className="flex flex-col gap-1 px-3">
         {grupos.map((grupo, i) => (
           <div key={i} className={grupo.titulo ? 'mt-4' : ''}>
-            {grupo.titulo && (
+            {grupo.titulo && !colapsado && (
               <p className="px-3 mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
                 {grupo.titulo}
               </p>
             )}
+            {grupo.titulo && colapsado && <div className="border-t my-3 mx-1" />}
             <div className="flex flex-col gap-0.5">
               {grupo.items.map((it) => {
                 const Icon = it.icon
                 return (
-                  <NavLink key={it.to} to={it.to} end={it.exact} className={linkClass}>
-                    <Icon size={17} strokeWidth={1.9} className="flex-shrink-0" />
-                    <span>{it.label}</span>
+                  <NavLink
+                    key={it.to}
+                    to={it.to}
+                    end={it.exact}
+                    className={linkClass(colapsado)}
+                    title={colapsado ? it.label : undefined}
+                  >
+                    <Icon size={18} strokeWidth={1.9} className="flex-shrink-0" />
+                    {!colapsado && <span className="whitespace-nowrap">{it.label}</span>}
                   </NavLink>
                 )
               })}

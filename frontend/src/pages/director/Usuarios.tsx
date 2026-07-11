@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 import api from '../../services/api'
+import TablaScroll from '../../components/TablaScroll'
+import { Cargando, MensajeError, Vacio } from '../../components/Estado'
 import type { ApiResponse, Rol } from '../../types'
 
 interface UsuarioRow {
@@ -196,25 +198,24 @@ export default function Usuarios() {
         <span className="text-sm text-gray-400 self-center">{usuarios.length} resultado(s)</span>
       </div>
 
-      {error && <div className="bg-red-50 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm">{error}</div>}
+      {error && <MensajeError mensaje={error} onReintentar={cargar} />}
 
       {cargando ? (
-        <div className="flex justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-ups-blue" />
-        </div>
+        <Cargando texto="Cargando usuarios…" />
+      ) : usuarios.length === 0 ? (
+        <Vacio mensaje="No hay usuarios que coincidan con los filtros seleccionados." />
       ) : (
-        <div className="bg-white rounded-xl border overflow-hidden">
-          {usuarios.length === 0 ? (
-            <p className="text-center text-gray-400 text-sm py-10">No hay usuarios que coincidan.</p>
-          ) : (
-            <table className="w-full text-sm">
+        <TablaScroll anchoMinimo="52rem">
+          {(
+            <table className="w-full text-sm whitespace-nowrap">
               <thead className="bg-gray-50 border-b">
                 <tr>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Nombre</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Email</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Rol</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Estado</th>
-                  <th className="px-4 py-3" />
+                  {/* Fija a la derecha: las acciones deben verse aunque haya scroll */}
+                  <th className="px-4 py-3 sticky right-0 bg-gray-50 border-l" />
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -235,7 +236,7 @@ export default function Usuarios() {
                         : <span className="bg-gray-100 text-gray-400 px-2 py-0.5 rounded text-xs">Inactivo</span>
                       }
                     </td>
-                    <td className="px-4 py-3 text-right space-x-3">
+                    <td className="px-4 py-3 text-right space-x-3 sticky right-0 bg-white border-l">
                       <button onClick={() => abrirEditar(u)} className="text-ups-blue hover:underline text-xs">
                         Editar
                       </button>
@@ -251,7 +252,7 @@ export default function Usuarios() {
               </tbody>
             </table>
           )}
-        </div>
+        </TablaScroll>
       )}
 
       {/* Modal */}

@@ -155,6 +155,25 @@ docker compose exec backend python -m app.db.seed_test_users
 
 Al terminar, el sistema queda disponible en **http://localhost**.
 
+### Atajo: dejar el sistema listo para una demostración
+
+Los pasos 5, 7 y 8 (y algunos más) se pueden ejecutar de una sola vez. El comando
+es **idempotente**: se puede repetir sin duplicar datos.
+
+```bash
+docker compose exec backend alembic upgrade head
+docker compose exec backend python app/static/plantillas/crear_plantillas.py
+docker compose exec backend python -m app.db.seed_demo
+```
+
+`seed_demo` carga las áreas, el período 67 con sus 44 asignaturas y 39 docentes,
+asigna las 6 jefaturas de área a docentes reales, crea las cuentas de prueba y al
+terminar **imprime con qué credenciales entrar**.
+
+No carga calificaciones: los `.xlsx` contienen datos reales de estudiantes y no
+están en el repositorio. Para cargarlas, entra como directora y usa
+*Subir Calificaciones*.
+
 > **Nota sobre las plantillas `.docx`:** se generan con el script del paso 6 y **no
 > se versionan en el repo**. Sin ellas, los informes salen con un formato básico de
 > respaldo en lugar del formato institucional completo (logo, encabezado y pie).
