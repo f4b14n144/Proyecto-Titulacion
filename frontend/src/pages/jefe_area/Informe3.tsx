@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
+import { Mail } from 'lucide-react'
 import api from '../../services/api'
 import { useAuth } from '../../hooks/useAuth'
 import { descargarInforme } from '../../services/informes.service'
@@ -35,38 +37,14 @@ export default function Informe3() {
   const [visitas, setVisitas] = useState<Record<number, VisitaRow>>({})
   const [guardando, setGuardando] = useState(false)
   const [generando, setGenerando] = useState(false)
-  const [notificando, setNotificando] = useState(false)
-  const [msgNotif, setMsgNotif] = useState('')
   const [msg, setMsg] = useState('')
   const [error, setError] = useState('')
 
-  const notificarEstudiantes = async () => {
-    if (!consejoId) return
-    setNotificando(true); setMsgNotif('')
-    try {
-      const { data } = await api.post('/flujo/notificar-estudiantes', { consejo_id: Number(consejoId) })
-      setMsgNotif(data.message ?? 'Estudiantes notificados.')
-    } catch (e: unknown) {
-      const m = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-      setMsgNotif(m ?? 'No se pudo notificar a los estudiantes.')
-    } finally {
-      setNotificando(false)
-    }
-  }
-
-  const enviarReporteMejoras = async () => {
-    if (!consejoId) return
-    setNotificando(true); setMsgNotif('')
-    try {
-      const { data } = await api.post('/flujo/reporte-mejoras-estudiantes', { consejo_id: Number(consejoId) })
-      setMsgNotif(data.message ?? 'Reporte de mejoras enviado.')
-    } catch (e: unknown) {
-      const m = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-      setMsgNotif(m ?? 'No se pudo enviar el reporte de mejoras.')
-    } finally {
-      setNotificando(false)
-    }
-  }
+  // Los botones "Notificar a estudiantes" y "Enviar reporte de mejoras" se
+  // quitaron: fabricaban direcciones de correo inexistentes
+  // (estudiantes.{codigo}.{grupo}@est.ups.edu.ec) y decían "enviado" aunque no
+  // llegara a nadie. Los correos a estudiantes se envían desde "Enviar correos",
+  // que usa los destinatarios reales del Excel del período.
 
   useEffect(() => {
     Promise.all([
@@ -161,28 +139,12 @@ export default function Informe3() {
           ))}
         </select>
         {consejoId && (
-          <>
-            <button onClick={notificarEstudiantes} disabled={notificando}
-              className="bg-ups-red text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700 transition disabled:opacity-60">
-              {notificando ? 'Enviando...' : '✉ Notificar a estudiantes'}
-            </button>
-            <button onClick={enviarReporteMejoras} disabled={notificando}
-              className="bg-ups-blue text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-800 transition disabled:opacity-60">
-              {notificando ? 'Enviando...' : '📄 Enviar reporte de mejoras'}
-            </button>
-          </>
+          <Link to="/jefe/correos"
+            className="flex items-center gap-2 border border-ups-blue text-ups-blue px-4 py-2 rounded-lg text-sm font-medium hover:bg-ups-blue hover:text-white transition">
+            <Mail size={15} /> Enviar correos a estudiantes
+          </Link>
         )}
       </div>
-
-      {msgNotif && (
-        <div className="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded-lg mb-4 text-sm">
-          {msgNotif}
-          <p className="text-xs text-blue-600 mt-1">
-            Se invita a los estudiantes de las materias del área a acercarse al Jefe de Área
-            si tienen quejas u observaciones.
-          </p>
-        </div>
-      )}
 
       {/* PARTE A */}
       {asignaciones.length > 0 && (

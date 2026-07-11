@@ -138,63 +138,16 @@ def enviar_email_docente(
     enviar_email(destinatario, asunto, cuerpo, reply_to=reply_to)
 
 
-def enviar_email_estudiantes(
-    destinatarios: list[str],
-    consejo_id: int,
-) -> None:
-    """Email a estudiantes invitando a reportar al jefe de área."""
-    asunto = f"[UPS Computación] Espacio para compartir con tu Jefe de Área — Consejo {consejo_id}"
-    cuerpo = """
-    <html><body style="font-family: Arial, sans-serif; color: #333;">
-    <p>Estimado/a estudiante,</p>
-    <p>La Carrera de Computación te invita a compartir cualquier observación,
-    sugerencia o inquietud sobre el desarrollo de tus asignaturas con tu
-    <strong>Jefe de Área</strong>.</p>
-    <p>Puedes contactarte directamente con tu jefe de área a través del sistema
-    o acercarte a la Dirección de Carrera.</p>
-    <br>
-    <p>Carrera de Computación — UPS Cuenca</p>
-    </body></html>
-    """
-    for dest in destinatarios:
-        try:
-            enviar_email(dest, asunto, cuerpo)
-        except Exception as e:
-            logger.warning(f"No se pudo enviar email a estudiante {dest}: {e}")
-
-
-def enviar_reporte_mejoras_estudiantes(
-    destinatarios: list[str],
-    consejo_id: int,
-    area_nombre: str,
-    bloques_html: str,
-) -> None:
-    """
-    Email a estudiantes con el REPORTE FINAL de mejoras del área,
-    derivado del Informe 3 (análisis de calificaciones + acciones de mejora).
-    """
-    asunto = f"[UPS Computación] Reporte de mejoras — {area_nombre}"
-    cuerpo = f"""
-    <html><body style="font-family: Arial, sans-serif; color: #333; line-height:1.5;">
-    <p>Estimado/a estudiante,</p>
-    <p>Como parte del proceso de seguimiento académico de la Carrera de Computación,
-    compartimos contigo el <strong>reporte de mejoras</strong> del área
-    <strong>{area_nombre}</strong>, con las acciones que se implementarán para
-    fortalecer tu proceso de aprendizaje.</p>
-    <hr>
-    {bloques_html}
-    <hr>
-    <p>Agradecemos tu compromiso. Si tienes observaciones adicionales, puedes
-    acercarte a tu Jefe de Área.</p>
-    <br>
-    <p>Carrera de Computación — UPS Cuenca</p>
-    </body></html>
-    """
-    for dest in destinatarios:
-        try:
-            enviar_email(dest, asunto, cuerpo)
-        except Exception as e:
-            logger.warning(f"No se pudo enviar reporte a estudiante {dest}: {e}")
+# Aquí vivían `enviar_email_estudiantes` y `enviar_reporte_mejoras_estudiantes`.
+#
+# Se eliminaron porque sus destinatarios se fabricaban con una plantilla
+# (`estudiantes.{codigo}.{grupo}@est.ups.edu.ec`): direcciones que no existen, así
+# que los correos no llegaban a nadie. Además el envío iba dentro de un try/except
+# silencioso, de modo que la interfaz respondía "enviado" igualmente.
+#
+# Los correos a estudiantes se envían desde `app/api/v1/endpoints/correos.py`, que
+# usa los destinatarios REALES cargados del Excel del período (tabla `estudiantes`),
+# aplica las plantillas de los anexos y ofrece un modo prueba.
 
 
 def enviar_docx_jefe(
