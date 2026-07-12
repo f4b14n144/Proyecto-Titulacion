@@ -1,0 +1,9 @@
+# El contexto de build de este servicio es ./frontend, así que Docker busca aquí su
+# .dockerignore (el de la raíz NO se aplica a este contexto).
+#
+# Sin esto, `COPY . .` copia el node_modules del host encima del que instala
+# `npm install` en la imagen y lo corrompe: el contenedor arranca en bucle con
+# errores tipo "Cannot find module '/app/node_modules/dist/node/cli.js'".
+node_modules
+dist
+.vite
