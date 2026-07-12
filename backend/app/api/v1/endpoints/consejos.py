@@ -1,3 +1,4 @@
+from datetime import date, timedelta
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from pydantic import BaseModel
@@ -98,6 +99,109 @@ def eliminar_consejo(
     db.delete(consejo)
     db.commit()
     return {"data": None, "message": "Consejo eliminado", "success": True}
+
+
+# ──────────────────────────────────────────────────────────────────
+# Fechas de entrega de cada informe (1-4)
+#
+# El planificador envía un recordatorio 2 días antes de cada una, a los jefes de
+# área (que elaboran el informe) y a los docentes (que registran sus aportes).
+# ──────────────────────────────────────────────────────────────────
+
+class FechaEntregaIn(BaseModel):
+    tipo_informe: int   # 1 | 2 | 3 | 4
+    fecha_entrega: date
+
+
+class FechasEntregaUpdate(BaseModel):
+    fechas: list[FechaEntregaIn]
+
+
+@router.get("/{consejo_id}/fechas-entrega", response_model=dict)
+def obtener_fechas_entrega(
+    consejo_id: int,
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(_director_o_jefe),
+):
+    """Fechas de entrega de los 4 informes, y cuándo saldría el recordatorio."""
+    from app.core.scheduler import DIAS_ANTES
+    from app.models.fecha_entrega import FechaEntregaInforme
+
+    if not db.query(ConsejoCarrera).filter(ConsejoCarrera.id == consejo_id).first():
+        raise HTTPException(status_code=404, detail="Consejo no encontrado")
+
+    filas = (
+        db.query(FechaEntregaInforme)
+        .filter(FechaEntregaInforme.consejo_id == consejo_id)
+        .order_by(FechaEntregaInforme.tipo_informe)
+        .all()
+    )
+    return {
+        "data": [
+            {
+                "tipo_informe": f.tipo_informe,
+                "fecha_entrega": str(f.fecha_entrega),
+                "fecha_recordatorio": str(f.fecha_entrega - timedelta(days=DIAS_ANTES)),
+            }
+            for f in filas
+        ],
+        "message": f"{len(filas)} fecha(s) configurada(s)",
+        "success": True,
+    }
+
+
+@router.put("/{consejo_id}/fechas-entrega", response_model=dict)
+def guardar_fechas_entrega(
+    consejo_id: int,
+    payload: FechasEntregaUpdate,
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(_solo_director),
+):
+    """
+    Fija las fechas de entrega y **reprograma los recordatorios** en el acto.
+
+    Solo la Dirección de Carrera. Es un upsert por tipo de informe: se puede volver
+    a entrar y cambiar una fecha sin borrar las demás.
+    """
+    from app.core.scheduler import programar_recordatorios_consejo
+    from app.models.fecha_entrega import FechaEntregaInforme
+
+    if not db.query(ConsejoCarrera).filter(ConsejoCarrera.id == consejo_id).first():
+        raise HTTPException(status_code=404, detail="Consejo no encontrado")
+
+    existentes = {
+        f.tipo_informe: f
+        for f in db.query(FechaEntregaInforme).filter(
+            FechaEntregaInforme.consejo_id == consejo_id
+        )
+    }
+
+    for item in payload.fechas:
+        if item.tipo_informe not in (1, 2, 3, 4):
+            raise HTTPException(status_code=400, detail="tipo_informe debe ser 1, 2, 3 o 4")
+        fila = existentes.get(item.tipo_informe)
+        if fila is None:
+            db.add(FechaEntregaInforme(
+                consejo_id=consejo_id,
+                tipo_informe=item.tipo_informe,
+                fecha_entrega=item.fecha_entrega,
+            ))
+        else:
+            fila.fecha_entrega = item.fecha_entrega
+
+    db.commit()
+
+    # Sin esto las fechas quedarían guardadas pero nadie avisaría de ellas
+    programados = programar_recordatorios_consejo(consejo_id)
+
+    return {
+        "data": {"guardadas": len(payload.fechas), "recordatorios_programados": programados},
+        "message": (
+            f"{len(payload.fechas)} fecha(s) guardada(s). "
+            f"{programados} recordatorio(s) programado(s)."
+        ),
+        "success": True,
+    }
 
 
 # ──────────────────────────────────────────────────────────────────

@@ -48,6 +48,11 @@ class EnvioDocentesIn(EnvioBase):
     area_id: Optional[int] = None
 
 
+class RecordatorioIn(EnvioBase):
+    consejo_id: int
+    tipo_informe: int  # 1 | 2 | 3 | 4
+
+
 class EnvioEstudiantesIn(EnvioBase):
     periodo_id: int
     asignatura_id: Optional[int] = None
@@ -288,3 +293,36 @@ def correos_a_estudiantes(
             f" Se omitieron {len(sin_docente)} materia(s) sin docente asignado."
         )
     return respuesta
+
+
+# ──────────────────────────────────────────────────────────────────
+# Recordatorio de entrega — el mismo que envía el planificador 2 días antes
+#
+# Este endpoint permite previsualizarlo (o dispararlo a mano) sin tener que
+# esperar a la fecha. El automático lo lanza APScheduler.
+# ──────────────────────────────────────────────────────────────────
+
+@router.post("/recordatorio", response_model=dict)
+def correos_recordatorio(
+    payload: RecordatorioIn,
+    tareas: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(_director_o_jefe),
+):
+    """
+    Recordatorio de entrega de un informe: va a los jefes de área (que lo elaboran)
+    y a los docentes (que registran sus observaciones y acciones de mejora).
+    """
+    from app.services.recordatorios import preparar_recordatorios
+
+    if payload.tipo_informe not in (1, 2, 3, 4):
+        raise HTTPException(status_code=400, detail="tipo_informe debe ser 1, 2, 3 o 4")
+
+    correos = preparar_recordatorios(db, payload.consejo_id, payload.tipo_informe)
+    if not correos:
+        raise HTTPException(
+            status_code=400,
+            detail="No hay fecha de entrega configurada para ese informe en este consejo",
+        )
+
+    return _respuesta(correos, payload, tareas)

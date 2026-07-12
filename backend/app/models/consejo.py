@@ -21,3 +21,6 @@ class ConsejoCarrera(Base):
     contenido_direccion = relationship(
         "ContenidoConsejo", back_populates="consejo", uselist=False
     )
+    fechas_entrega = relationship(
+        "FechaEntregaInforme", back_populates="consejo", cascade="all, delete-orphan"
+    )

@@ -103,7 +103,11 @@ def enviar_email(
 
     try:
         server = _conectar_smtp()
-        server.sendmail(settings.EMAIL_FROM, [destinatario], msg.as_string())
+        # `send_message` y no `sendmail`: este último codifica las direcciones en
+        # ASCII y reventaba con los correos que llevan tilde o eñe
+        # (p. ej. ordoñez.vinicio@…). `send_message` negocia SMTPUTF8 con el
+        # servidor cuando hace falta.
+        server.send_message(msg)
         server.quit()
         logger.info(f"Email enviado a {destinatario}: {asunto}")
     except Exception as e:

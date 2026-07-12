@@ -217,6 +217,100 @@ def correo_visita_aulica(
 
 
 # ──────────────────────────────────────────────────────────────────
+# Recordatorios automáticos (los envía el planificador, 2 días antes)
+# ──────────────────────────────────────────────────────────────────
+
+NOMBRE_INFORME = {
+    1: "Informe 1 — Centro Docente",
+    2: "Informe 2 — Revisión del Aula Virtual (AVAC)",
+    3: "Informe 3 — Visitas Áulicas e Interciclo",
+    4: "Informe 4 — Análisis Final de Calificaciones",
+}
+
+# Qué le toca hacer a cada rol en cada informe
+_TAREAS_JEFE = {
+    1: ["Añadir el aporte de su área a las secciones del Consejo de Carrera."],
+    2: [
+        "Completar el checklist de los 12 parámetros del aula virtual (AVAC) de cada "
+        "asignatura de su área.",
+        "Registrar sus observaciones y acciones de mejora.",
+    ],
+    3: [
+        "Registrar el checklist de las visitas áulicas realizadas.",
+        "Revisar el análisis de las calificaciones de interciclo.",
+    ],
+    4: ["Revisar el análisis final de calificaciones y las acciones de mejora del área."],
+}
+
+
+def correo_recordatorio_jefe(
+    titulo: str,
+    nombre: str,
+    area_nombre: str,
+    tipo_informe: int,
+    fecha_entrega: str,
+) -> tuple[str, str]:
+    """Recordatorio al jefe de área: faltan 2 días para entregar su informe."""
+    nombre_informe = NOMBRE_INFORME.get(tipo_informe, f"Informe {tipo_informe}")
+    asunto = f"Recordatorio: {nombre_informe} — entrega el {fecha_entrega}"
+
+    cuerpo = (
+        _p(f"Estimado/a {_tratamiento(titulo)}{escape(nombre)}:")
+        + _p("Reciba un cordial saludo.")
+        + _p(
+            f"Le recordamos que la entrega del <strong>{escape(nombre_informe)}</strong> "
+            f"correspondiente al Área de <strong>{escape(area_nombre)}</strong> está prevista "
+            f"para el <strong>{escape(fecha_entrega)}</strong>, es decir, en dos días."
+        )
+        + _p("Para completarlo, debe ingresar al sistema y:")
+        + _lista(_TAREAS_JEFE.get(tipo_informe, ["Completar y generar el informe de su área."]))
+        + _p(
+            "Una vez completado, puede generar el documento y descargarlo desde la sección "
+            "de informes."
+        )
+        + _p("Agradezco de antemano su puntualidad y colaboración.")
+        + _firma("Dirección de Carrera", "Dirección de Carrera")
+    )
+    return asunto, cuerpo
+
+
+def correo_recordatorio_docente(
+    titulo: str,
+    nombre: str,
+    materias: list[str],
+    fecha_entrega: str,
+) -> tuple[str, str]:
+    """Recordatorio al docente: registrar sus aportes antes de que cierre el informe."""
+    asunto = f"Recordatorio: observaciones y acciones de mejora — hasta el {fecha_entrega}"
+
+    listado = _lista([escape(m) for m in materias]) if materias else ""
+
+    cuerpo = (
+        _p(f"Estimado/a {_tratamiento(titulo)}{escape(nombre)}:")
+        + _p("Reciba un cordial saludo.")
+        + _p(
+            "Le recordamos que el <strong>"
+            f"{escape(fecha_entrega)}</strong> cierra el plazo para registrar sus "
+            "<strong>observaciones</strong> y <strong>acciones de mejora</strong> sobre las "
+            "asignaturas que imparte, que se incorporarán a los informes de seguimiento "
+            f"académico de la {CARRERA}."
+        )
+        + (_p("Asignaturas a su cargo:") + listado if materias else "")
+        + _p(
+            "Puede registrarlas ingresando al sistema, en las secciones "
+            "<strong>Observaciones</strong> y <strong>Acciones de mejora</strong> de su panel. "
+            "Cada registro se acumula, de modo que puede añadir varios a lo largo del período."
+        )
+        + _p(
+            "Su aporte constituye un insumo de gran valor para el análisis y el fortalecimiento "
+            "continuo de la carrera."
+        )
+        + _firma("Dirección de Carrera", "Dirección de Carrera")
+    )
+    return asunto, cuerpo
+
+
+# ──────────────────────────────────────────────────────────────────
 # Cargo legible del remitente
 # ──────────────────────────────────────────────────────────────────
 

@@ -12,6 +12,9 @@ from loguru import logger
 
 scheduler = BackgroundScheduler(timezone="America/Guayaquil")
 
+# Antelación del recordatorio de entrega de cada informe
+DIAS_ANTES = 2
+
 
 def iniciar_scheduler():
     if not scheduler.running:
@@ -112,6 +115,102 @@ def sincronizar_todos_los_consejos():
             db.close()
     except Exception as e:
         logger.exception(f"Error sincronizando consejos al inicio: {e}")
+
+
+# ──────────────────────────────────────────────────────────
+# Recordatorios de entrega: 2 días antes de cada informe
+# ──────────────────────────────────────────────────────────
+
+def _job_recordatorio(consejo_id: int, tipo_informe: int) -> str:
+    return f"recordatorio_c{consejo_id}_i{tipo_informe}"
+
+
+def _ejecutar_recordatorio(consejo_id: int, tipo_informe: int):
+    """Lo dispara APScheduler. Abre su propia sesión de BD."""
+    from app.db.session import SessionLocal
+    from app.services.recordatorios import enviar_recordatorios
+
+    db = SessionLocal()
+    try:
+        resultado = enviar_recordatorios(db, consejo_id, tipo_informe)
+        logger.info(
+            f"Recordatorio informe {tipo_informe} del consejo {consejo_id}: {resultado}"
+        )
+    except Exception as e:
+        logger.exception(f"Error enviando recordatorios: {e}")
+    finally:
+        db.close()
+
+
+def programar_recordatorios_consejo(consejo_id: int):
+    """
+    (Re)programa el recordatorio de cada informe del consejo, 2 días antes de su
+    fecha de entrega. Se llama al crear o editar las fechas.
+
+    Una fecha que ya pasó no se programa: no tiene sentido avisar de algo vencido.
+    """
+    from app.db.session import SessionLocal
+    from app.models.fecha_entrega import FechaEntregaInforme
+
+    db = SessionLocal()
+    try:
+        fechas = (
+            db.query(FechaEntregaInforme)
+            .filter(FechaEntregaInforme.consejo_id == consejo_id)
+            .all()
+        )
+        ahora = datetime.now(timezone.utc)
+        programados = 0
+
+        for f in fechas:
+            job_id = _job_recordatorio(consejo_id, f.tipo_informe)
+            if scheduler.get_job(job_id):
+                scheduler.remove_job(job_id)
+
+            aviso = datetime.combine(f.fecha_entrega, datetime.min.time()).replace(
+                tzinfo=timezone.utc
+            ) - timedelta(days=DIAS_ANTES)
+
+            if aviso <= ahora:
+                logger.info(
+                    f"Consejo {consejo_id}, informe {f.tipo_informe}: el aviso "
+                    f"({aviso.date()}) ya pasó, no se programa"
+                )
+                continue
+
+            scheduler.add_job(
+                _ejecutar_recordatorio,
+                trigger=DateTrigger(run_date=aviso),
+                id=job_id,
+                args=[consejo_id, f.tipo_informe],
+                replace_existing=True,
+            )
+            programados += 1
+            logger.info(
+                f"Consejo {consejo_id}, informe {f.tipo_informe}: recordatorio "
+                f"programado para {aviso.date()} (entrega {f.fecha_entrega})"
+            )
+        return programados
+    finally:
+        db.close()
+
+
+def sincronizar_recordatorios():
+    """Reprograma los recordatorios de todos los consejos al arrancar el servidor."""
+    try:
+        from app.db.session import SessionLocal
+        from app.models.consejo import ConsejoCarrera
+
+        db = SessionLocal()
+        try:
+            ids = [c.id for c in db.query(ConsejoCarrera).all()]
+        finally:
+            db.close()
+
+        total = sum(programar_recordatorios_consejo(cid) for cid in ids)
+        logger.info(f"Recordatorios programados al inicio: {total}")
+    except Exception as e:
+        logger.exception(f"Error sincronizando recordatorios: {e}")
 
 
 # ──────────────────────────────────────────────────────────

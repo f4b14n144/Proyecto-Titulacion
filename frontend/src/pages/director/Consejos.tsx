@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { consejosService, type Consejo, type ConsejoCreate } from '../../services/consejos.service'
 import { periodosService } from '../../services/periodos.service'
+import FechasEntrega from '../../components/FechasEntrega'
 import { formatFecha, formatEstado } from '../../utils/formatters'
 import type { PeriodoAcademico } from '../../types'
 
@@ -36,6 +37,8 @@ export default function Consejos() {
   const [form, setForm] = useState<FormData>(formVacio)
   const [guardando, setGuardando] = useState(false)
   const [errorForm, setErrorForm] = useState('')
+  // Consejo cuyas fechas de entrega se están editando
+  const [fechasDe, setFechasDe] = useState<Consejo | null>(null)
 
   const cargar = async () => {
     setCargando(true)
@@ -194,6 +197,13 @@ export default function Consejos() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-right">
+                    <button
+                      onClick={() => setFechasDe(c)}
+                      className="text-ups-blue hover:underline text-xs mr-3"
+                      title="Fijar la fecha de entrega de cada informe"
+                    >
+                      Fechas de entrega
+                    </button>
                     {c.flujo_estado === 'PENDIENTE' && (
                       <>
                         <button
@@ -297,6 +307,15 @@ export default function Consejos() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Fechas de entrega de los 4 informes (y sus recordatorios automáticos) */}
+      {fechasDe && (
+        <FechasEntrega
+          consejoId={fechasDe.id}
+          etiqueta={`${nombrePeriodo(fechasDe.periodo_id)} — Consejo del ${formatFecha(fechasDe.fecha_consejo)}`}
+          onCerrar={() => setFechasDe(null)}
+        />
       )}
     </div>
   )

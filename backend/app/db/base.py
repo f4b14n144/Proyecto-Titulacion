@@ -18,3 +18,4 @@ from app.models.respuesta_docente import RespuestaDocente  # noqa: F401
 from app.models.aporte_docente import AporteDocente  # noqa: F401
 from app.models.contenido_consejo import ContenidoConsejo  # noqa: F401
 from app.models.estudiante import Estudiante, EstudianteAsignatura  # noqa: F401
+from app.models.fecha_entrega import FechaEntregaInforme  # noqa: F401
