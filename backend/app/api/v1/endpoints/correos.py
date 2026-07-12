@@ -34,13 +34,13 @@ _director_o_jefe = require_role("DIRECTOR_CARRERA", "JEFE_AREA")
 
 
 class EnvioBase(BaseModel):
+    # `true` = solo previsualizar (devuelve los correos renderizados, no envía).
+    #
+    # Que los correos lleguen o no a su destinatario REAL no se decide aquí, sino
+    # con `MAIL_MODO_PRUEBA` en el `.env`, dentro de `mail_service.enviar_email`.
+    # Esa es la capa por la que pasan todos los correos del sistema, incluidos los
+    # automáticos del planificador, que un parámetro de la API no protegería.
     modo_prueba: bool = True
-    # Red de seguridad para probar el formato: si se indica, TODOS los correos se
-    # envían a esa dirección en vez de a los destinatarios reales. El destinatario
-    # original queda anotado en el asunto.
-    redirigir_a: Optional[str] = None
-    # Tope de correos a preparar/enviar (útil al probar: evita mandar decenas).
-    limite: Optional[int] = None
 
 
 class EnvioDocentesIn(EnvioBase):
@@ -116,26 +116,7 @@ def _despachar(correos: list[dict]) -> None:
     logger.info(f"Tanda de correos terminada: {enviados} enviados, {fallidos} fallidos")
 
 
-def _aplicar_opciones(correos: list[dict], cfg: EnvioBase) -> list[dict]:
-    """Aplica el tope y la redirección de prueba antes de enviar nada."""
-    if cfg.limite is not None:
-        correos = correos[: max(cfg.limite, 0)]
-
-    if cfg.redirigir_a:
-        redirigidos = []
-        for c in correos:
-            copia = dict(c)
-            copia["destinatario_real"] = c["destinatario"]
-            copia["destinatario"] = cfg.redirigir_a
-            copia["asunto"] = f"[PRUEBA · para {c['destinatario']}] {c['asunto']}"
-            redirigidos.append(copia)
-        correos = redirigidos
-    return correos
-
-
 def _respuesta(correos: list[dict], cfg: EnvioBase, tareas: BackgroundTasks) -> dict:
-    correos = _aplicar_opciones(correos, cfg)
-
     if cfg.modo_prueba:
         return {
             "data": {"modo_prueba": True, "total": len(correos), "correos": correos},
@@ -143,15 +124,12 @@ def _respuesta(correos: list[dict], cfg: EnvioBase, tareas: BackgroundTasks) -> 
             "success": True,
         }
 
+    # El envío pasa por `enviar_email`, que aplica MAIL_MODO_PRUEBA: si está activo,
+    # nada llega a los destinatarios reales aunque se llegue hasta aquí.
     tareas.add_task(_despachar, correos)
-    destino = f" (redirigidos a {cfg.redirigir_a})" if cfg.redirigir_a else ""
     return {
-        "data": {
-            "modo_prueba": False,
-            "total": len(correos),
-            "redirigido_a": cfg.redirigir_a,
-        },
-        "message": f"Enviando {len(correos)} correo(s) en segundo plano{destino}.",
+        "data": {"modo_prueba": False, "total": len(correos)},
+        "message": f"Enviando {len(correos)} correo(s) en segundo plano.",
         "success": True,
     }
 

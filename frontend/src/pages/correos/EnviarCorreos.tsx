@@ -55,8 +55,6 @@ export default function EnviarCorreos() {
   const [flujoActivo, setFlujoActivo] = useState<Flujo | null>(null)
   const [ocupado, setOcupado] = useState<string | null>(null)
   const [verCorreo, setVerCorreo] = useState<CorreoPreview | null>(null)
-  const [redirigirA, setRedirigirA] = useState('')
-  const [limite, setLimite] = useState('')
   const [msg, setMsg] = useState('')
   const [error, setError] = useState('')
 
@@ -79,12 +77,10 @@ export default function EnviarCorreos() {
     const periodoId = periodoDeConsejo()
     setOcupado(`${flujo}-${modoPrueba}`); setError(''); setMsg('')
     try {
-      // Opciones de prueba: redirigir todo a una sola dirección y limitar la tanda
-      const opciones = {
-        modo_prueba: modoPrueba,
-        redirigir_a: redirigirA.trim() || undefined,
-        limite: limite.trim() ? Number(limite) : undefined,
-      }
+      // `modo_prueba` aquí solo significa "previsualizar sin enviar".
+      // Que los correos lleguen o no a su destinatario real lo decide
+      // MAIL_MODO_PRUEBA en el .env, dentro del servicio de correo.
+      const opciones = { modo_prueba: modoPrueba }
       const cuerpo =
         flujo === 'estudiantes'
           ? { periodo_id: periodoId, ...opciones }
@@ -103,10 +99,7 @@ export default function EnviarCorreos() {
   }
 
   const enviarDeVerdad = async (flujo: Flujo, total: number) => {
-    const destino = redirigirA.trim()
-      ? `todos a ${redirigirA.trim()} (prueba)`
-      : 'a los destinatarios reales'
-    if (!confirm(`Se enviarán ${total} correo(s) ${destino}. ¿Continuar?`)) return
+    if (!confirm(`Se enviarán ${total} correo(s) a los destinatarios. ¿Continuar?`)) return
     await llamar(flujo, false)
   }
 
@@ -136,50 +129,12 @@ export default function EnviarCorreos() {
         </select>
       </div>
 
-      {/* Opciones para probar el formato sin escribir a docentes ni estudiantes reales */}
-      <details className="bg-white border rounded-xl mb-5">
-        <summary className="px-5 py-3 cursor-pointer text-sm font-medium text-gray-700 select-none">
-          Opciones de prueba
-        </summary>
-        <div className="px-5 pb-4 grid grid-cols-1 md:grid-cols-2 gap-4 border-t pt-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Enviar todo a una sola dirección
-            </label>
-            <input
-              type="email"
-              value={redirigirA}
-              onChange={(e) => setRedirigirA(e.target.value)}
-              placeholder="tu.correo@est.ups.edu.ec"
-              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ups-blue"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Ningún docente ni estudiante recibe nada. El destinatario real se indica en el asunto.
-            </p>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Máximo de correos
-            </label>
-            <input
-              type="number"
-              min={1}
-              value={limite}
-              onChange={(e) => setLimite(e.target.value)}
-              placeholder="sin límite"
-              className="w-40 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ups-blue"
-            />
-            <p className="text-xs text-gray-500 mt-1">Útil para no mandar decenas de correos al probar.</p>
-          </div>
-        </div>
-      </details>
-
-      {redirigirA.trim() && (
-        <p className="text-sm bg-amber-50 border border-amber-200 text-amber-900 px-3 py-2 rounded mb-4">
-          <AlertTriangle size={15} className="inline mr-1 -mt-0.5" />
-          Modo prueba de envío: todos los correos irán a <strong>{redirigirA.trim()}</strong>.
-        </p>
-      )}
+      {/*
+        El modo prueba NO se controla desde aquí, sino con MAIL_MODO_PRUEBA en el
+        .env. Vive en el servicio de correo (la capa más baja), así que también
+        cubre los envíos automáticos del planificador, que una opción de pantalla
+        no podría proteger.
+      */}
 
       {msg && <p className="text-green-700 text-sm bg-green-50 px-3 py-2 rounded mb-4">{msg}</p>}
       {error && <p className="text-red-600 text-sm bg-red-50 px-3 py-2 rounded mb-4">{error}</p>}
