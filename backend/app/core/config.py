@@ -24,6 +24,16 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: str = ""
     EMAIL_FROM: str = ""
 
+    # ── Interruptor global de correo ──────────────────────────────────────────
+    # Con MAIL_MODO_PRUEBA=true NINGÚN correo llega a su destinatario real. Se
+    # aplica dentro de `mail_service.enviar_email`, o sea en la capa más baja: así
+    # ningún camino puede saltárselo, ni siquiera los envíos automáticos del
+    # planificador (que es justo por donde se escapan los accidentes).
+    #   - Si hay MAIL_REDIRECT_TO, todo se redirige a esa dirección.
+    #   - Si no la hay, no se envía nada: solo se registra en el log.
+    MAIL_MODO_PRUEBA: bool = False
+    MAIL_REDIRECT_TO: str = ""
+
     IMAP_HOST: str = ""
     IMAP_PORT: int = 993
     IMAP_USER: str = ""

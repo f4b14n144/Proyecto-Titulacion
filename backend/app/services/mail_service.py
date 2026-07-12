@@ -55,6 +55,33 @@ def _conectar_smtp() -> smtplib.SMTP:
 # Envío de emails
 # ──────────────────────────────────────────────────────────────────
 
+def _aplicar_modo_prueba(destinatario: str, asunto: str) -> tuple[str, str] | None:
+    """
+    Interruptor global de correo (`MAIL_MODO_PRUEBA` en el `.env`).
+
+    Devuelve el (destinatario, asunto) que se debe usar, o `None` si el correo no
+    debe enviarse en absoluto.
+
+    Se aplica aquí, en la capa más baja, a propósito: **todos** los correos del
+    sistema pasan por `enviar_email`, así que ningún camino puede saltárselo — ni
+    los envíos manuales de la UI ni los automáticos del planificador. Un
+    interruptor que viviera solo en la UI dejaría al scheduler mandando correos
+    reales sin que nadie lo pidiera.
+    """
+    if not settings.MAIL_MODO_PRUEBA:
+        return destinatario, asunto
+
+    if not settings.MAIL_REDIRECT_TO:
+        logger.warning(
+            f"MAIL_MODO_PRUEBA activo y sin MAIL_REDIRECT_TO — correo a "
+            f"{destinatario} NO enviado: {asunto}"
+        )
+        return None
+
+    logger.info(f"MAIL_MODO_PRUEBA: correo para {destinatario} redirigido a {settings.MAIL_REDIRECT_TO}")
+    return settings.MAIL_REDIRECT_TO, f"[PRUEBA · para {destinatario}] {asunto}"
+
+
 def enviar_email(
     destinatario: str,
     asunto: str,
@@ -67,6 +94,12 @@ def enviar_email(
     if not settings.SMTP_USER or not settings.SMTP_PASSWORD:
         logger.warning(f"SMTP no configurado — email a {destinatario} omitido (modo dev)")
         return
+
+    # Red de seguridad: nada sale de aquí si el modo prueba está activo
+    redirigido = _aplicar_modo_prueba(destinatario, asunto)
+    if redirigido is None:
+        return
+    destinatario, asunto = redirigido
 
     # multipart/related permite incrustar el logo inline junto al HTML
     msg = MIMEMultipart("related")

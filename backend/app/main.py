@@ -47,6 +47,11 @@ def _revisar_configuracion() -> None:
         )
     if not settings.SMTP_USER or not settings.SMTP_PASSWORD:
         problemas.append("SMTP sin configurar: no se enviarán correos.")
+    if settings.MAIL_MODO_PRUEBA and settings.es_produccion:
+        problemas.append(
+            "MAIL_MODO_PRUEBA está activo en producción: los correos NO llegarán a "
+            "docentes ni estudiantes."
+        )
     if any(o.startswith("http://localhost") for o in settings.origenes_cors):
         problemas.append("CORS_ORIGINS apunta a localhost; poner el dominio real.")
 
@@ -71,6 +76,14 @@ def _revisar_configuracion() -> None:
 @app.on_event("startup")
 async def startup_event():
     logger.info(f"Iniciando {settings.APP_NAME} en modo {settings.ENVIRONMENT}")
+
+    # Que nunca haya duda de si los correos salen de verdad o no
+    if settings.MAIL_MODO_PRUEBA:
+        destino = settings.MAIL_REDIRECT_TO or "(ninguno: no se enviará nada)"
+        logger.warning(f"CORREO EN MODO PRUEBA — todo se redirige a: {destino}")
+    else:
+        logger.info("CORREO EN MODO REAL — los correos llegan a sus destinatarios")
+
     _revisar_configuracion()
     iniciar_scheduler()
     sincronizar_todos_los_consejos()

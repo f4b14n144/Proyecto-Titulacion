@@ -17,11 +17,14 @@ institucional (logo, encabezado y pie de página).
 3. [Requisitos](#requisitos)
 4. [Guía de implementación](#guía-de-implementación)
 5. [Variables de entorno](#variables-de-entorno)
-6. [URLs y credenciales](#urls-y-credenciales)
-7. [Modelo de roles](#modelo-de-roles)
-8. [Los cuatro informes](#los-cuatro-informes)
-9. [Estructura del proyecto](#estructura-del-proyecto)
-10. [Comandos útiles](#comandos-útiles)
+6. [Modo prueba de correo](#modo-prueba-de-correo)
+7. [Fechas de entrega y recordatorios automáticos](#fechas-de-entrega-y-recordatorios-automáticos)
+8. [URLs y credenciales](#urls-y-credenciales)
+9. [Modelo de roles](#modelo-de-roles)
+10. [Los cuatro informes](#los-cuatro-informes)
+11. [Estructura del proyecto](#estructura-del-proyecto)
+12. [Despliegue en producción](#despliegue-en-producción)
+13. [Comandos útiles](#comandos-útiles)
 
 ---
 
@@ -206,9 +209,63 @@ SMTP_PORT=587
 SMTP_USER=<cuenta de correo>
 SMTP_PASSWORD=<clave / app password>
 REPLY_TO_DOMAIN=<dominio para emails de respuesta>
+
+# Interruptor global de correo (ver más abajo)
+MAIL_MODO_PRUEBA=true
+MAIL_REDIRECT_TO=<tu correo, para recibir todo mientras pruebas>
 ```
 
 > `.env` está en `.gitignore` y **nunca** debe subirse al repositorio.
+
+---
+
+## Modo prueba de correo
+
+El sistema envía correos a docentes y estudiantes, algunos de forma **automática**
+(el planificador avisa 2 días antes de cada entrega). Para no escribirle a nadie
+real mientras se prueba, hay un interruptor global en el `.env`:
+
+| `MAIL_MODO_PRUEBA` | `MAIL_REDIRECT_TO` | Qué ocurre |
+|---|---|---|
+| `true` | `tu@correo.com` | **Todos** los correos llegan a esa dirección. El destinatario original va en el asunto: `[PRUEBA · para docente@ups.edu.ec] …` |
+| `true` | *(vacío)* | **No se envía nada.** Solo se registra en el log. |
+| `false` | — | **Envío real.** Los correos llegan a docentes y estudiantes. |
+
+El interruptor se aplica **dentro del servicio de correo**, en la capa más baja. Eso
+es deliberado: todos los correos del sistema pasan por ahí, así que **ningún camino
+puede saltárselo** — ni los envíos manuales desde la interfaz, ni los automáticos
+del planificador. Un interruptor que viviera solo en la interfaz dejaría al
+planificador enviando correos reales sin que nadie se lo pidiera.
+
+Al arrancar, el backend deja claro en qué modo está:
+
+```
+CORREO EN MODO PRUEBA — todo se redirige a: tu@correo.com
+CORREO EN MODO REAL — los correos llegan a sus destinatarios
+```
+
+> **En producción va en `false`.** Si se deja en `true`, el backend lo avisa como un
+> problema de configuración al arrancar.
+
+> **Ojo:** `docker compose restart` **no relee el `.env`**. Tras cambiarlo hay que
+> recrear el contenedor: `docker compose up -d --force-recreate backend`.
+
+---
+
+## Fechas de entrega y recordatorios automáticos
+
+Cada Consejo de Carrera tiene **una fecha de entrega por informe** (1, 2, 3 y 4). Las
+fija la Dirección de Carrera desde *Consejos de Carrera* → **Fechas de entrega**.
+
+**Dos días antes** de cada fecha, el planificador envía un recordatorio:
+
+- A los **jefes de área**, que elaboran el informe. El texto detalla qué les toca
+  hacer según el informe (p. ej. para el 2: completar el checklist del aula virtual).
+- A los **docentes**, para que registren sus observaciones y acciones de mejora antes
+  de que el informe se cierre. Un solo correo por docente, listando sus materias.
+
+Los recordatorios se reprograman al arrancar el servidor, de modo que **sobreviven a
+un reinicio**. Una fecha que ya pasó no se programa.
 
 ---
 
@@ -324,6 +381,21 @@ docker compose -f docker-compose.prod.yml exec backend python app/static/plantil
 docker compose -f docker-compose.prod.yml exec backend python -m app.db.seed
 ```
 
+### Checklist antes de salir a producción
+
+- [ ] `SECRET_KEY` generada con `openssl rand -hex 32`.
+      *Con la de ejemplo se pueden falsificar tokens de cualquier usuario; el backend
+      se niega a arrancar.*
+- [ ] `POSTGRES_PASSWORD` fuerte (no `password`).
+- [ ] `ENVIRONMENT=production` — oculta `/docs` y `/redoc`.
+- [ ] `CORS_ORIGINS` con el dominio real, no `localhost`.
+- [ ] **`MAIL_MODO_PRUEBA=false`** — si queda en `true`, los correos no llegan a
+      nadie. El backend lo avisa al arrancar.
+- [ ] `SMTP_*` de una cuenta **institucional**, no personal.
+      *Gmail limita los envíos diarios y una tanda son ~90 correos.*
+- [ ] `GROQ_API_KEY` (o la del proveedor de IA que se use).
+- [ ] Cambiar la contraseña de la cuenta de dirección tras el primer acceso.
+
 ### Qué cambia respecto a desarrollo
 
 | | Desarrollo | Producción |
@@ -333,6 +405,7 @@ docker compose -f docker-compose.prod.yml exec backend python -m app.db.seed
 | `/docs` y `/redoc` | Visibles | **404** |
 | Descarga de `.docx` | — | Solo por la API, con JWT |
 | Backend | `--reload` | Sin reload, 1 worker |
+| Correo | `MAIL_MODO_PRUEBA=true` | `false` (envío real) |
 | Secretos | Valores por defecto | **Obligatorios**: el backend no arranca con una `SECRET_KEY` de ejemplo |
 
 > **Un solo worker, a propósito.** El planificador (APScheduler) va embebido en
