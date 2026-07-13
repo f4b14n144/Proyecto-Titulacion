@@ -13,14 +13,21 @@ from app.schemas.consejo import ConsejoCreate, ConsejoUpdate, ConsejoOut
 router = APIRouter()
 
 _solo_director = require_role("DIRECTOR_CARRERA")
-_director_o_jefe = require_role("DIRECTOR_CARRERA", "JEFE_AREA", "DOCENTE")  # lectura compartida
+# La lista de consejos la necesitan los tres roles: el docente elige un consejo para
+# registrar sus aportes. (El nombre anterior, `_director_o_jefe`, engañaba: incluía
+# también al docente.)
+_lectura_todos = require_role("DIRECTOR_CARRERA", "JEFE_AREA", "DOCENTE")
+
+# El contenido del consejo (agenda, resoluciones) y las fechas de entrega son de la
+# gestión de la carrera: el docente no accede.
+_director_o_jefe = require_role("DIRECTOR_CARRERA", "JEFE_AREA")
 
 
 @router.get("/", response_model=dict)
 def listar_consejos(
     periodo_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
-    _: Usuario = Depends(_director_o_jefe),
+    _: Usuario = Depends(_lectura_todos),   # el docente elige consejo en su panel
 ):
     q = db.query(ConsejoCarrera)
     if periodo_id is not None:

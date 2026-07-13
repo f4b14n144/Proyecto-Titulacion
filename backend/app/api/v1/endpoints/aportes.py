@@ -176,9 +176,32 @@ def aportes_por_materia(
     asignatura_id: int,
     grupo: Optional[str] = Query(None),
     db: Session = Depends(get_db),
-    _: Usuario = Depends(get_current_user),
+    current_user: Usuario = Depends(get_current_user),
 ):
-    """Aportes de una materia-grupo — lo usan los jefes al armar sus informes."""
+    """
+    Aportes de una materia-grupo — lo usan los jefes al armar sus informes.
+
+    NO es para docentes: aquí se leerían las observaciones que escribió OTRO docente
+    sobre su propia materia. Un docente ve las suyas en `/mis-materias`.
+    Además, el jefe solo puede consultar las asignaturas de SU área.
+    """
+    rol = getattr(current_user, "rol_efectivo", current_user.rol.nombre)
+    if rol not in ("DIRECTOR_CARRERA", "JEFE_AREA"):
+        raise HTTPException(status_code=403, detail="No tienes acceso a los aportes de esta materia")
+
+    if rol == "JEFE_AREA":
+        from app.models.jefatura import JefaturaArea
+
+        asignatura = db.query(Asignatura).filter(Asignatura.id == asignatura_id).first()
+        if asignatura is None:
+            raise HTTPException(status_code=404, detail="Asignatura no encontrada")
+        suya = db.query(JefaturaArea).filter(
+            JefaturaArea.usuario_id == current_user.id,
+            JefaturaArea.area_id == asignatura.area_id,
+        ).first()
+        if not suya:
+            raise HTTPException(status_code=403, detail="Esa asignatura no es de tu área")
+
     q = db.query(AporteDocente).filter(
         AporteDocente.consejo_id == consejo_id,
         AporteDocente.asignatura_id == asignatura_id,

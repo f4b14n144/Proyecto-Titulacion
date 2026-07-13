@@ -101,6 +101,14 @@ def listar_informes(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
+    # Un docente NO accede a los informes: contienen el análisis de notas y la
+    # evaluación de otros docentes. `GET /informes/{id}` ya lo bloqueaba, pero la
+    # lista no: el docente caía fuera de todos los filtros y los veía TODOS, con su
+    # contenido_json completo.
+    rol = getattr(current_user, "rol_efectivo", current_user.rol.nombre)
+    if rol not in ("DIRECTOR_CARRERA", "JEFE_AREA"):
+        raise HTTPException(status_code=403, detail="No tienes acceso a los informes")
+
     q = db.query(Informe)
     if consejo_id:
         q = q.filter(Informe.consejo_id == consejo_id)
@@ -111,7 +119,7 @@ def listar_informes(
         q = q.filter(Informe.area_id.in_(_areas_del_jefe(db, jefe_id) or [-1]))
 
     # Un JEFE_AREA solo ve los informes de SU(S) área(s) — el Informe 1 ya es por área
-    if getattr(current_user, "rol_efectivo", current_user.rol.nombre) == "JEFE_AREA":
+    if rol == "JEFE_AREA":
         q = q.filter(Informe.area_id.in_(_areas_del_jefe(db, current_user.id) or [-1]))
 
     # Orden estable: primero por tipo (1,2,3,4) y luego por área
