@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import api from '../../services/api'
 import { useAuth } from '../../hooks/useAuth'
+import GenerarConIA from '../../components/GenerarConIA'
 import { descargarInforme } from '../../services/informes.service'
 import type { ApiResponse } from '../../types'
 
@@ -47,9 +48,10 @@ export default function Informe4() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [consejos])
 
-  const seleccionar = async (cId: string) => {
-    setConsejoId(cId); setInforme(null); setEditando({}); setMsg('')
-    if (!cId) return
+  /** Relee el informe del consejo y sincroniza los campos editables. Devuelve el
+   *  informe leído, que es lo que necesita el sondeo tras regenerar con IA. */
+  const cargarInforme = async (cId: string): Promise<Informe | null> => {
+    if (!cId) return null
     try {
       const { data } = await api.get<ApiResponse<Informe[]>>('/informes/', { params: { consejo_id: cId } })
       const inf = data.data.find((i) => i.tipo_informe === 4) ?? null
@@ -62,15 +64,42 @@ export default function Informe4() {
         })
         setEditando(init)
       }
-    } catch { /* sin informe */ }
+      return inf
+    } catch {
+      return null   // el informe aún no existe
+    }
+  }
+
+  const seleccionar = async (cId: string) => {
+    setConsejoId(cId); setInforme(null); setEditando({}); setMsg('')
+    await cargarInforme(cId)
   }
 
   const generarBorrador = async () => {
     setGenerando(true); setMsg(''); setError('')
+    const antes = JSON.stringify(informe?.contenido_json ?? null)
     try {
       await api.post('/informes/generar-borrador', { consejo_id: Number(consejoId), area_id: user?.area_id, tipo_informe: 4 })
-      setMsg('Generando con IA… puede tardar 1-2 minutos. Recarga en unos momentos.')
-    } catch { setError('Error al iniciar la generación.') } finally { setGenerando(false) }
+      setMsg('Generando con IA… puede tardar 1-2 minutos.')
+
+      // El endpoint responde al instante y la IA sigue en segundo plano, así que
+      // hay que esperar a que el contenido cambie. Si no, la pantalla se queda con
+      // el informe VIEJO en memoria y un "Guardar ediciones" lo escribiría encima,
+      // deshaciendo la regeneración que se acaba de pedir.
+      for (let i = 0; i < 40; i++) {          // 40 × 5s ≈ 3 minutos
+        await new Promise((r) => setTimeout(r, 5000))
+        const actualizado = await cargarInforme(consejoId)
+        if (actualizado && JSON.stringify(actualizado.contenido_json) !== antes) {
+          setMsg('Informe regenerado con IA.')
+          return
+        }
+      }
+      setError('La IA está tardando más de lo normal. Vuelve a entrar en unos minutos.')
+    } catch {
+      setError('Error al iniciar la generación.')
+    } finally {
+      setGenerando(false)
+    }
   }
 
   const guardar = async () => {
@@ -117,11 +146,12 @@ export default function Informe4() {
             <option key={c.id} value={c.id}>{nombreP(c.periodo_id)} — {c.fecha_consejo}</option>
           ))}
         </select>
-        {consejoId && !informe && (
-          <button onClick={generarBorrador} disabled={generando}
-            className="bg-ups-blue text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-800 disabled:opacity-60">
-            {generando ? 'Iniciando IA...' : 'Generar borrador con IA'}
-          </button>
+        {consejoId && (
+          <GenerarConIA
+            existe={!!informe}
+            generando={generando}
+            onGenerar={generarBorrador}
+          />
         )}
       </div>
 

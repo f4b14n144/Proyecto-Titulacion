@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
+import { Sparkles } from 'lucide-react'
 import api from '../../services/api'
 import { useAuth } from '../../hooks/useAuth'
 import { descargarInforme } from '../../services/informes.service'
 import { Cargando, MensajeError } from '../../components/Estado'
-import { Sparkles } from 'lucide-react'
+import GenerarConIA from '../../components/GenerarConIA'
 import type { ApiResponse } from '../../types'
 
 interface Consejo { id: number; periodo_id: number; fecha_consejo: string }
@@ -311,11 +312,12 @@ export default function Informe2() {
                 className="bg-ups-blue text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-blue-800 disabled:opacity-50">
                 {guardando ? 'Guardando...' : 'Guardar checklist'}
               </button>
-              <button onClick={generarConIA} disabled={guardando || generando}
-                className="flex items-center gap-2 bg-violet-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-violet-700 disabled:opacity-50">
-                <Sparkles size={15} />
-                {generando ? 'Generando con IA...' : 'Generar acciones con IA'}
-              </button>
+              <GenerarConIA
+                existe={!!informe?.contenido_json?.checklists}
+                generando={generando || guardando}
+                onGenerar={generarConIA}
+                nota="Tu checklist y tus observaciones se conservan: se guardan aparte y se vuelven a leer."
+              />
               {informe && (
                 <button onClick={generarDocx} disabled={guardando || generando}
                   className="bg-green-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50">

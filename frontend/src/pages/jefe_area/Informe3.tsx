@@ -5,6 +5,7 @@ import api from '../../services/api'
 import { useAuth } from '../../hooks/useAuth'
 import { descargarInforme } from '../../services/informes.service'
 import GraficoInforme from '../../components/GraficoInforme'
+import GenerarConIA from '../../components/GenerarConIA'
 import type { ApiResponse } from '../../types'
 
 interface Consejo { id: number; periodo_id: number; fecha_consejo: string }
@@ -134,6 +135,13 @@ export default function Informe3() {
     return asig?.area_id === user?.area_id
   })
 
+  const releerInforme = async (): Promise<Informe | null> => {
+    const res = await api.get<ApiResponse<Informe[]>>('/informes/', { params: { consejo_id: consejoId } })
+    const inf = res.data.data.find((i) => i.tipo_informe === 3) ?? null
+    setInforme(inf)
+    return inf
+  }
+
   const guardar = async () => {
     if (!consejoId || !user?.area_id) return
     setGuardando(true); setError(''); setMsg('')
@@ -143,13 +151,47 @@ export default function Informe3() {
         { consejo_id: Number(consejoId), area_id: user.area_id, items: Object.values(visitas) },
       )
       setMsg(data.message)
-      if (!informe) {
-        const res = await api.get<ApiResponse<Informe[]>>('/informes/', { params: { consejo_id: consejoId } })
-        setInforme(res.data.data.find((i) => i.tipo_informe === 3) ?? null)
-      }
+      if (!informe) await releerInforme()
     } catch {
       setError('No se pudieron guardar las visitas.')
     } finally { setGuardando(false) }
+  }
+
+  /**
+   * Guarda las visitas y pide a la IA la PARTE B: análisis del interciclo y los
+   * gráficos de distribución por rango.
+   *
+   * Antes esta pantalla NO llamaba a la IA en ningún momento — solo regeneraba el
+   * .docx, que se limita a renderizar la plantilla. En un consejo nuevo la PARTE B
+   * salía vacía y sin gráficos.
+   */
+  const generarBorrador = async () => {
+    if (!consejoId || !user?.area_id) return
+    await guardar()
+
+    const antes = JSON.stringify(informe?.contenido_json ?? null)
+    setGenerando(true); setError(''); setMsg('Generando el análisis del interciclo con IA…')
+    try {
+      await api.post('/informes/generar-borrador', {
+        consejo_id: Number(consejoId), area_id: user.area_id, tipo_informe: 3,
+      })
+
+      // Corre en segundo plano: hay que esperar a que el contenido cambie, o la
+      // pantalla se quedaría mostrando el informe anterior.
+      for (let i = 0; i < 40; i++) {          // 40 × 5s ≈ 3 minutos
+        await new Promise((r) => setTimeout(r, 5000))
+        const inf = await releerInforme()
+        if (inf && JSON.stringify(inf.contenido_json) !== antes) {
+          setMsg('Análisis e gráficos generados por la IA.')
+          return
+        }
+      }
+      setError('La IA está tardando más de lo normal. Vuelve a entrar en unos minutos.')
+    } catch {
+      setError('No se pudo generar el análisis.')
+    } finally {
+      setGenerando(false)
+    }
   }
 
   const generarDocx = async () => {
@@ -272,10 +314,16 @@ export default function Informe3() {
             className="bg-ups-blue text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-blue-800 disabled:opacity-60">
             {guardando ? 'Guardando...' : 'Guardar visitas'}
           </button>
+          <GenerarConIA
+            existe={!!analisis?.length}
+            generando={generando || guardando}
+            onGenerar={generarBorrador}
+            nota="Tus visitas áulicas y tus observaciones se conservan: se guardan aparte y se vuelven a leer."
+          />
           {informe && (
             <button onClick={generarDocx} disabled={generando}
               className="bg-green-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-60">
-              {generando ? 'Generando IA + .docx...' : 'Generar Informe 3'}
+              {generando ? 'Generando...' : 'Regenerar .docx'}
             </button>
           )}
           {informe?.ruta_docx && (
