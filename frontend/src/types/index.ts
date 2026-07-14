@@ -13,6 +13,8 @@ export interface AuthUser {
   rol: 'DIRECTOR_CARRERA' | 'JEFE_AREA' | 'DOCENTE'
   activo: boolean
   titulo?: string | null
+  /** Foto de perfil como data URI; null si no ha subido ninguna */
+  foto?: string | null
   /** Área que dirige, si es jefe de área */
   area_id?: number | null
   area_nombre?: string | null

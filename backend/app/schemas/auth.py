@@ -28,6 +28,8 @@ class MeResponse(BaseModel):
     rol: str
     activo: bool
     titulo: Optional[str] = None
+    # Foto de perfil como data URI; None si no ha subido ninguna
+    foto: Optional[str] = None
     # Área que dirige, si es jefe de área. Los paneles del jefe la usan para
     # generar sus informes (antes mandaban area_id=0, que daba 403).
     area_id: Optional[int] = None

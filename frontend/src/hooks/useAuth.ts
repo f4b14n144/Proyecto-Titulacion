@@ -7,6 +7,9 @@ interface AuthContext {
   loading: boolean
   login: (email: string, password: string) => Promise<void>
   logout: () => void
+  /** Relee /auth/me. Se llama tras editar el perfil para que la barra superior
+   *  muestre el nombre y la foto nuevos sin recargar la página. */
+  refrescar: () => Promise<void>
 }
 
 export const AuthCtx = createContext<AuthContext>({
@@ -14,6 +17,7 @@ export const AuthCtx = createContext<AuthContext>({
   loading: true,
   login: async () => {},
   logout: () => {},
+  refrescar: async () => {},
 })
 
 export function useAuthProvider(): AuthContext {
@@ -49,7 +53,11 @@ export function useAuthProvider(): AuthContext {
     setUser(null)
   }
 
-  return { user, loading, login, logout }
+  const refrescar = async () => {
+    setUser(await authService.me())
+  }
+
+  return { user, loading, login, logout, refrescar }
 }
 
 export function useAuth() {
