@@ -61,24 +61,23 @@ def _enviar_notificaciones(db: Session, consejo: ConsejoCarrera) -> None:
             if not docente:
                 continue
 
-            token = str(uuid.uuid4())
-
-            # Registrar la notificación a nivel de consejo (informe_id se asocia luego)
+            # Registrar la notificación a nivel de consejo (informe_id se asocia luego).
+            # `reply_to_token` es solo un id único de la notificación (la columna es
+            # obligatoria y única); ya no se usa para correlacionar respuestas.
             noti = Notificacion(
                 informe_id=None,
                 consejo_id=consejo.id,
                 destinatario_email=docente.email_institucional,
                 tipo="DOCENTE_SUGERENCIA",
-                reply_to_token=token,
+                reply_to_token=str(uuid.uuid4()),
             )
             db.add(noti)
-            db.flush()  # persistir para que el token quede disponible para correlación IMAP
+            db.flush()
 
             try:
                 enviar_email_docente(
                     destinatario=docente.email_institucional,
                     nombre_docente=docente.nombre_completo,
-                    reply_to_token=token,
                     consejo_id=consejo.id,
                 )
                 logger.info(f"Notificación {noti.id} registrada para docente {docente.email_institucional}")

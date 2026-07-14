@@ -1,4 +1,4 @@
-﻿from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DateTime
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.db.declarative import Base
@@ -14,10 +14,11 @@ class Notificacion(Base):
     consejo_id = Column(Integer, ForeignKey("consejos_carrera.id"), nullable=True)
     destinatario_email = Column(String, nullable=False)
     tipo = Column(String, nullable=False)  # DOCENTE_SUGERENCIA | ESTUDIANTE_REPORTE
+    # Identificador único de la notificación. Nació como token del Reply-To para
+    # correlacionar respuestas por correo; esa recepción (IMAP) se eliminó, pero la
+    # columna se conserva como id único del envío.
     reply_to_token = Column(String, unique=True, nullable=False)
     enviado_en = Column(DateTime(timezone=True), server_default=func.now())
-    respondido = Column(Boolean, default=False)
 
     informe = relationship("Informe", back_populates="notificaciones")
     consejo = relationship("ConsejoCarrera", back_populates="notificaciones")
-    respuestas = relationship("RespuestaDocente", back_populates="notificacion")

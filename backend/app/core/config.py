@@ -34,11 +34,6 @@ class Settings(BaseSettings):
     MAIL_MODO_PRUEBA: bool = False
     MAIL_REDIRECT_TO: str = ""
 
-    IMAP_HOST: str = ""
-    IMAP_PORT: int = 993
-    IMAP_USER: str = ""
-    IMAP_PASSWORD: str = ""
-    REPLY_TO_DOMAIN: str = ""
 
     APP_NAME: str = "Sistema Informes UPS"
     ENVIRONMENT: str = "development"

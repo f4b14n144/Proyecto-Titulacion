@@ -6,7 +6,7 @@ from app.core.config import settings
 from app.api.v1.api_router import api_router
 from app.core.scheduler import (
     iniciar_scheduler, detener_scheduler, sincronizar_todos_los_consejos,
-    sincronizar_recordatorios, iniciar_polling_imap,
+    sincronizar_recordatorios,
 )
 
 # En producción no se publica la documentación interactiva de la API.
@@ -88,7 +88,6 @@ async def startup_event():
     iniciar_scheduler()
     sincronizar_todos_los_consejos()
     sincronizar_recordatorios()   # recordatorios de entrega de cada informe
-    iniciar_polling_imap()
 
 
 @app.on_event("shutdown")

@@ -84,8 +84,8 @@ Nginx actúa como único punto de entrada (reverse proxy) hacia el frontend y la
    narrativa profesional en español; `doc_generator` produce el `.docx` con
    formato institucional a partir de plantillas Jinja2.
 4. **Notificaciones automáticas (Scheduler):** APScheduler programa el envío de
-   correos a docentes/estudiantes 2 días antes de la fecha límite del consejo, y
-   procesa las respuestas por IMAP (correlación por token Reply-To).
+   correos a docentes/estudiantes 2 días antes de la fecha límite del consejo.
+   Los docentes registran sus observaciones y acciones de mejora desde su panel.
 5. **Revisión y descarga:** los informes se previsualizan (render del `.docx`
    real en el navegador) y se descargan.
 
@@ -97,8 +97,8 @@ Nginx actúa como único punto de entrada (reverse proxy) hacia el frontend y la
 | `ia_engine.py` | Genera análisis narrativo vía LiteLLM (GROQ); reintentos con backoff y fallback |
 | `generador_informes.py` | Orquesta la construcción del contenido de cada informe (1–4) |
 | `doc_generator.py` | Renderiza plantillas Jinja2 `.docx` con el contenido; formato institucional |
-| `mail_service.py` | Envío SMTP con logo embebido; procesamiento IMAP de respuestas |
-| `scheduler.py` | Jobs de APScheduler (envío programado + polling IMAP), zona America/Guayaquil |
+| `mail_service.py` | Envío SMTP de correos con el logo institucional embebido |
+| `scheduler.py` | Jobs de APScheduler (envío programado de recordatorios), zona America/Guayaquil |
 
 ---
 
@@ -203,12 +203,11 @@ AI_PROVIDER=groq
 AI_MODEL=groq/llama-3.3-70b-versatile
 GROQ_API_KEY=<api key de GROQ>
 
-# Correo (envío de notificaciones y recepción de respuestas)
+# Correo saliente (envío de notificaciones y recordatorios)
 SMTP_HOST=<host SMTP>
 SMTP_PORT=587
 SMTP_USER=<cuenta de correo>
 SMTP_PASSWORD=<clave / app password>
-REPLY_TO_DOMAIN=<dominio para emails de respuesta>
 
 # Interruptor global de correo (ver más abajo)
 MAIL_MODO_PRUEBA=true

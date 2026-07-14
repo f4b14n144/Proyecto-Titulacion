@@ -9,7 +9,6 @@ from app.core.deps import get_db, require_role
 from app.models.consejo import ConsejoCarrera
 from app.models.usuario import Usuario
 from app.models.notificacion import Notificacion
-from app.models.respuesta_docente import RespuestaDocente
 from app.core.scheduler import programar_flujo_consejo
 from app.services.flujo_consejo import ejecutar_flujo
 from datetime import datetime, timezone
@@ -18,11 +17,6 @@ router = APIRouter()
 
 _solo_director = require_role("DIRECTOR_CARRERA")
 _director_o_jefe = require_role("DIRECTOR_CARRERA", "JEFE_AREA")
-
-
-class RespuestaSimuladaIn(BaseModel):
-    reply_to_token: str
-    contenido: str
 
 
 @router.post("/{consejo_id}/disparar", response_model=dict)
@@ -85,8 +79,7 @@ def listar_notificaciones(
                 "id": n.id,
                 "destinatario_email": n.destinatario_email,
                 "tipo": n.tipo,
-                "reply_to_token": n.reply_to_token,
-                "respondido": n.respondido,
+                "enviado_en": str(n.enviado_en) if n.enviado_en else None,
             }
             for n in notis
         ],
@@ -95,46 +88,10 @@ def listar_notificaciones(
     }
 
 
-@router.post("/simular-respuesta", response_model=dict)
-def simular_respuesta_docente(
-    payload: RespuestaSimuladaIn,
-    db: Session = Depends(get_db),
-    _: Usuario = Depends(_solo_director),
-):
-    """
-    Simula la recepción de una respuesta de docente (lo que haría el polling IMAP).
-    Correlaciona por reply_to_token, guarda la RespuestaDocente y marca respondido=True.
-    Solo para desarrollo/testing.
-    """
-    noti = db.query(Notificacion).filter(
-        Notificacion.reply_to_token == payload.reply_to_token
-    ).first()
-    if not noti:
-        raise HTTPException(status_code=404, detail="Token de notificación no encontrado")
-    if noti.respondido:
-        raise HTTPException(status_code=400, detail="Esta notificación ya fue respondida")
-
-    respuesta = RespuestaDocente(
-        notificacion_id=noti.id,
-        contenido=payload.contenido.strip(),
-    )
-    db.add(respuesta)
-    noti.respondido = True
-    db.commit()
-    db.refresh(respuesta)
-
-    return {
-        "data": {
-            "respuesta_id": respuesta.id,
-            "notificacion_id": noti.id,
-            "destinatario": noti.destinatario_email,
-        },
-        "message": "Respuesta de docente registrada (simulada)",
-        "success": True,
-    }
-
-
-
+# El endpoint /simular-respuesta se eliminó junto con la recepción de correo por
+# IMAP: el docente registra sus observaciones y acciones de mejora desde su panel
+# (/aportes), que es la vía real y la que alimenta los informes.
+#
 # Los endpoints /notificar-estudiantes y /reporte-mejoras-estudiantes se
 # eliminaron: fabricaban direcciones de correo inexistentes con la plantilla
 #   estudiantes.{codigo}.{grupo}@est.ups.edu.ec

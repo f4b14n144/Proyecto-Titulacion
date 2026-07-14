@@ -1,13 +1,12 @@
 """
-Servicio de correo: envío SMTP (Brevo) y recepción IMAP.
+Servicio de correo: envío SMTP.
 
-Convención de Reply-To para correlacionar respuestas de docentes:
-  respuestas+{uuid}@{REPLY_TO_DOMAIN}
+El sistema solo ENVÍA correo. La recepción por IMAP (leer las respuestas de los
+docentes y correlacionarlas por un token en el Reply-To) se eliminó: el docente
+registra sus observaciones y acciones de mejora desde su panel (`/aportes`), que
+es la vía real y la que alimenta los informes.
 """
-import email
-import imaplib
 import smtplib
-import uuid
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
@@ -15,7 +14,6 @@ from email.mime.image import MIMEImage
 from email import encoders
 from pathlib import Path
 from loguru import logger
-from sqlalchemy.orm import Session
 from app.core.config import settings
 
 # Logo institucional que se incrusta en los correos (imagen inline por Content-ID)
@@ -35,14 +33,6 @@ _PIE_LOGO = (
 # ──────────────────────────────────────────────────────────────────
 # Helpers
 # ──────────────────────────────────────────────────────────────────
-
-def generar_reply_to_token() -> str:
-    return str(uuid.uuid4())
-
-
-def _reply_to_address(token: str) -> str:
-    return f"respuestas+{token}@{settings.REPLY_TO_DOMAIN}"
-
 
 def _conectar_smtp() -> smtplib.SMTP:
     server = smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT)
@@ -86,7 +76,6 @@ def enviar_email(
     destinatario: str,
     asunto: str,
     cuerpo_html: str,
-    reply_to: str | None = None,
     adjunto_ruta: str | None = None,
     adjunto_nombre: str | None = None,
 ) -> None:
@@ -106,8 +95,6 @@ def enviar_email(
     msg["Subject"] = asunto
     msg["From"] = settings.EMAIL_FROM
     msg["To"] = destinatario
-    if reply_to:
-        msg["Reply-To"] = reply_to
 
     # El logo va al PIE. Si la plantilla ya lo coloca (junto a la firma), se respeta;
     # si no, se añade un pie institucional para no dejar el correo sin identidad.
@@ -151,11 +138,9 @@ def enviar_email(
 def enviar_email_docente(
     destinatario: str,
     nombre_docente: str,
-    reply_to_token: str,
     consejo_id: int,
 ) -> None:
     """Email a docente pidiendo observaciones sobre sus asignaturas."""
-    reply_to = _reply_to_address(reply_to_token)
     asunto = f"[UPS Computación] Solicitud de observaciones — Consejo {consejo_id}"
     cuerpo = f"""
     <html><body style="font-family: Arial, sans-serif; color: #333;">
@@ -163,8 +148,9 @@ def enviar_email_docente(
     <p>Le solicitamos compartir sus observaciones y comentarios sobre el desarrollo
     de sus asignaturas en el período académico en curso, en el marco del proceso de
     seguimiento académico del <strong>Consejo de Carrera #{consejo_id}</strong>.</p>
-    <p>Por favor responda directamente a este correo con sus observaciones.
-    Su respuesta será registrada automáticamente en el sistema.</p>
+    <p>Por favor registre sus observaciones y acciones de mejora desde su panel en el
+    sistema, en las secciones <strong>Observaciones</strong> y
+    <strong>Acciones de mejora</strong> de cada una de sus materias.</p>
     <p>Si tiene alguna inquietud, comuníquese con la Dirección de Carrera.</p>
     <br>
     <p>Atentamente,<br>
@@ -172,7 +158,7 @@ def enviar_email_docente(
     Carrera de Computación — UPS Cuenca</p>
     </body></html>
     """
-    enviar_email(destinatario, asunto, cuerpo, reply_to=reply_to)
+    enviar_email(destinatario, asunto, cuerpo)
 
 
 # Aquí vivían `enviar_email_estudiantes` y `enviar_reporte_mejoras_estudiantes`.
@@ -210,89 +196,3 @@ def enviar_docx_jefe(
     """
     nombre_archivo = f"Informe_{tipo_informe}_{nombre_tipo.replace(' ', '_')}.docx"
     enviar_email(destinatario, asunto, cuerpo, adjunto_ruta=ruta_docx, adjunto_nombre=nombre_archivo)
-
-
-# ──────────────────────────────────────────────────────────────────
-# Recepción IMAP
-# ──────────────────────────────────────────────────────────────────
-
-def _extraer_token_de_headers(msg_obj) -> str | None:
-    """Extrae el reply_to_token de los headers del email recibido."""
-    # Buscar en In-Reply-To, References o el To del mensaje
-    for header in ("To", "In-Reply-To", "References", "X-Original-To"):
-        valor = msg_obj.get(header, "")
-        if "respuestas+" in valor:
-            # Extraer UUID entre "respuestas+" y "@"
-            inicio = valor.find("respuestas+") + len("respuestas+")
-            fin = valor.find("@", inicio)
-            if fin > inicio:
-                return valor[inicio:fin]
-    return None
-
-
-def procesar_respuestas_imap(db: Session) -> int:
-    """
-    Conecta por IMAP, lee emails no vistos, correlaciona tokens y guarda respuestas.
-    Retorna el número de respuestas procesadas.
-    """
-    if not settings.IMAP_HOST or not settings.IMAP_USER:
-        logger.debug("IMAP no configurado — polling omitido")
-        return 0
-
-    from app.models.notificacion import Notificacion
-    from app.models.respuesta_docente import RespuestaDocente
-
-    procesados = 0
-    try:
-        imap = imaplib.IMAP4_SSL(settings.IMAP_HOST, settings.IMAP_PORT)
-        imap.login(settings.IMAP_USER, settings.IMAP_PASSWORD)
-        imap.select("INBOX")
-
-        _, mensajes = imap.search(None, "UNSEEN")
-        ids = mensajes[0].split()
-        logger.info(f"IMAP: {len(ids)} mensajes no vistos")
-
-        for uid in ids:
-            _, data = imap.fetch(uid, "(RFC822)")
-            raw = data[0][1]
-            msg_obj = email.message_from_bytes(raw)
-
-            token = _extraer_token_de_headers(msg_obj)
-            if not token:
-                continue
-
-            notificacion = db.query(Notificacion).filter(
-                Notificacion.reply_to_token == token
-            ).first()
-            if not notificacion or notificacion.respondido:
-                continue
-
-            # Extraer texto del cuerpo
-            cuerpo = ""
-            if msg_obj.is_multipart():
-                for parte in msg_obj.walk():
-                    if parte.get_content_type() == "text/plain":
-                        cuerpo = parte.get_payload(decode=True).decode("utf-8", errors="ignore")
-                        break
-            else:
-                cuerpo = msg_obj.get_payload(decode=True).decode("utf-8", errors="ignore")
-
-            respuesta = RespuestaDocente(
-                notificacion_id=notificacion.id,
-                contenido=cuerpo.strip(),
-            )
-            db.add(respuesta)
-            notificacion.respondido = True
-
-            # Marcar como leído
-            imap.store(uid, "+FLAGS", "\\Seen")
-            procesados += 1
-            logger.info(f"Respuesta guardada para notificación {notificacion.id}")
-
-        db.commit()
-        imap.logout()
-
-    except Exception as e:
-        logger.error(f"Error en polling IMAP: {e}")
-
-    return procesados

@@ -2,7 +2,7 @@
 Generador de borradores de informes 1-4.
 
 Cada función:
-  1. Recopila datos de la DB (calificaciones, checklists, respuestas)
+  1. Recopila datos de la DB (calificaciones, checklists, aportes del docente)
   2. Llama a ia_engine para análisis narrativos
   3. Construye contenido_json estructurado
   4. Crea o actualiza el registro en tabla `informes`
@@ -26,7 +26,6 @@ from app.models.periodo import PeriodoAcademico
 from app.models.area import Area
 from app.models.consejo import ConsejoCarrera
 from app.models.notificacion import Notificacion
-from app.models.respuesta_docente import RespuestaDocente
 
 from app.services import ia_engine
 from app.services.doc_generator import generar_docx
@@ -148,23 +147,15 @@ def _generar_grafico_interciclo(
 
 
 def _respuesta_docente(db: Session, docente_id: int, consejo_id: int) -> str:
-    """Recupera la última respuesta del docente para este consejo, si existe."""
-    noti = (
-        db.query(Notificacion)
-        .filter(
-            Notificacion.tipo == "DOCENTE_SUGERENCIA",
-        )
-        .first()
-    )
-    if not noti:
-        return ""
-    respuesta = (
-        db.query(RespuestaDocente)
-        .filter(RespuestaDocente.notificacion_id == noti.id)
-        .order_by(RespuestaDocente.recibido_en.desc())
-        .first()
-    )
-    return respuesta.contenido if respuesta else ""
+    """
+    Aporte del docente para alimentar el análisis del Informe 4.
+
+    Antes esto venía de las respuestas por correo (IMAP), que se eliminaron. El
+    docente registra ahora sus observaciones y acciones de mejora desde su panel,
+    y esos aportes ya llegan al informe por `_aportes_materia()`. Se deja el
+    parámetro `respuesta_docente` de la IA vacío para no romper su firma.
+    """
+    return ""
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -255,9 +246,31 @@ def _datos_jefe(db: Session, area_id: int, periodo_id: int) -> dict:
     """Nombre y título del jefe del área — van en la carátula y en las firmas."""
     jefe = _jefe_del_area(db, area_id, periodo_id)
     return {
-        "jefe_nombre": jefe.nombre_completo if jefe else "",
+        "jefe_nombre": nombre_para_firma(jefe.nombre_completo) if jefe else "",
         "jefe_titulo": (jefe.titulo or "") if jefe else "",
     }
+
+
+def nombre_para_firma(nombre_completo: str | None) -> str:
+    """
+    Pasa el nombre a orden de firma: nombres primero, apellidos después.
+
+    En la base los nombres vienen como los da la universidad, con los apellidos
+    delante ("Flores Vazquez Marcelo Esteban"), que no es como se firma un
+    documento ("Marcelo Esteban Flores Vazquez").
+
+    Solo reordena el caso inequívoco de **dos apellidos + dos nombres**. Con
+    cualquier otro número de palabras no hay forma de saber dónde acaban los
+    apellidos, así que se devuelve tal cual antes que inventarse el nombre de una
+    persona. El valor queda en `contenido_json` y es editable desde la UI.
+    """
+    if not nombre_completo:
+        return ""
+    partes = nombre_completo.split()
+    if len(partes) != 4:
+        return nombre_completo.strip()
+    apellidos, nombres = partes[:2], partes[2:]
+    return " ".join(nombres + apellidos)
 
 
 # Texto de la carátula. Es editable desde el informe (contenido_json).
@@ -312,7 +325,8 @@ def generar_informe_1(db: Session, consejo_id: int, area_id: int) -> Informe:
         "fecha_consejo": str(consejo.fecha_consejo) if consejo else "",
         "fecha_informe": str(datetime.now(timezone.utc).date()),
         "area_nombre": area.nombre if area else "",
-        "jefe_nombre": jefe.nombre_completo if jefe else "",
+        # Mismo orden de firma que el resto de informes (nombres, luego apellidos)
+        "jefe_nombre": nombre_para_firma(jefe.nombre_completo) if jefe else "",
         "jefe_titulo": (jefe.titulo or "") if jefe else "",
         # Copia de solo lectura de lo que escribió la dirección
         "secciones_direccion": dict(direccion.secciones or {}),
