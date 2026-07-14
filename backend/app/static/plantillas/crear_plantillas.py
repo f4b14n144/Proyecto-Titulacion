@@ -12,6 +12,7 @@ from docxtpl import DocxTemplate
 from docx import Document
 from docx.shared import Pt, Inches, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.table import WD_ALIGN_VERTICAL
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
 import copy
@@ -19,11 +20,30 @@ import copy
 DIR = Path(__file__).parent
 LOGO = DIR.parent / "logo-ups.jpg"  # app/static/logo-ups.jpg
 
+# La carátula va en Cambria (con serifa, más institucional); todo el resto del
+# informe, en Calibri. Es el formato que pidió el tutor.
+CAMBRIA = "Cambria"
+CALIBRI = "Calibri"
+
 UPS_BLUE = RGBColor(0x00, 0x3D, 0xA5)
+NEGRO = RGBColor(0x00, 0x00, 0x00)   # texto de la carátula
 GRIS_TEXTO = RGBColor(0x33, 0x33, 0x33)
 BLANCO = RGBColor(0xFF, 0xFF, 0xFF)
 AZUL_HEX = "003DA5"        # relleno encabezados de tabla
 GRIS_META_HEX = "E8EDF6"   # relleno columna de etiquetas (metadatos)
+
+
+def _fijar_fuente(rpr, nombre: str):
+    """
+    Fija la tipografía en los cuatro scripts de Word (ascii/hAnsi/cs/eastAsia).
+
+    Sin esto, `font.name` solo escribe `w:ascii` y Word rellena el resto con la
+    fuente del tema, así que los encabezados salían en Cambria aunque el estilo
+    dijera Calibri.
+    """
+    rfonts = rpr.get_or_add_rFonts()
+    for attr in ("w:ascii", "w:hAnsi", "w:cs", "w:eastAsia"):
+        rfonts.set(qn(attr), nombre)
 
 
 def _fuente_calibri(estilo, tamano: Pt, *, negrita: bool, color: RGBColor):
@@ -33,12 +53,7 @@ def _fuente_calibri(estilo, tamano: Pt, *, negrita: bool, color: RGBColor):
     estilo.font.bold = negrita
     estilo.font.italic = False
     estilo.font.color.rgb = color
-    # Word usa rFonts para elegir la tipografía de cada script; sin esto,
-    # los encabezados heredan la fuente del tema (Cambria) al abrirlos.
-    rpr = estilo.element.get_or_add_rPr()
-    rfonts = rpr.get_or_add_rFonts()
-    for attr in ("w:ascii", "w:hAnsi", "w:cs", "w:eastAsia"):
-        rfonts.set(qn(attr), "Calibri")
+    _fijar_fuente(estilo.element.get_or_add_rPr(), "Calibri")
 
 
 def _aplicar_estilos(doc: Document):
@@ -50,27 +65,48 @@ def _aplicar_estilos(doc: Document):
     normal = doc.styles["Normal"]
     _fuente_calibri(normal, Pt(11), negrita=False, color=GRIS_TEXTO)
     pf = normal.paragraph_format
-    pf.space_after = Pt(6)
+    pf.space_after = Pt(10)   # 6pt dejaba los párrafos demasiado apretados
     pf.line_spacing = 1.15
     pf.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
 
+    # Jerarquía tipográfica: 20 / 15 / 13 / 11 pt.
+    # Antes el Heading 3 iba a 12pt y el cuerpo a 11pt — un solo punto de
+    # diferencia, así que el subtítulo no se distinguía del texto.
+    # El `space_after` separa el encabezado del párrafo que lleva debajo: con 2pt
+    # el texto salía pegado al subtítulo.
+
     # Título del informe (Heading 1)
     h1 = doc.styles["Heading 1"]
-    _fuente_calibri(h1, Pt(18), negrita=True, color=UPS_BLUE)
+    _fuente_calibri(h1, Pt(20), negrita=True, color=UPS_BLUE)
     h1.paragraph_format.space_before = Pt(0)
-    h1.paragraph_format.space_after = Pt(12)
+    h1.paragraph_format.space_after = Pt(16)
 
     # Secciones principales (Heading 2)
     h2 = doc.styles["Heading 2"]
-    _fuente_calibri(h2, Pt(14), negrita=True, color=UPS_BLUE)
-    h2.paragraph_format.space_before = Pt(14)
-    h2.paragraph_format.space_after = Pt(4)
+    _fuente_calibri(h2, Pt(15), negrita=True, color=UPS_BLUE)
+    h2.paragraph_format.space_before = Pt(20)
+    h2.paragraph_format.space_after = Pt(10)
 
     # Subsecciones (Heading 3)
     h3 = doc.styles["Heading 3"]
-    _fuente_calibri(h3, Pt(12), negrita=True, color=RGBColor(0x22, 0x22, 0x22))
-    h3.paragraph_format.space_before = Pt(8)
-    h3.paragraph_format.space_after = Pt(2)
+    _fuente_calibri(h3, Pt(13), negrita=True, color=RGBColor(0x22, 0x22, 0x22))
+    h3.paragraph_format.space_before = Pt(14)
+    h3.paragraph_format.space_after = Pt(8)
+
+
+def _no_estirar_saltos_de_linea(doc: Document):
+    """
+    Evita que Word estire las líneas que terminan en un salto manual.
+
+    El cuerpo va justificado, y los valores con varias líneas (p. ej. las
+    designaciones de jefes) llegan como un solo párrafo con saltos `<w:br/>`.
+    Word justifica esas líneas igual que las demás y las abre hasta el margen,
+    dejando huecos enormes entre palabras. `doNotExpandShiftReturn` las trata
+    como última línea de párrafo, que es lo que son visualmente.
+    """
+    settings = doc.settings.element
+    opcion = OxmlElement("w:doNotExpandShiftReturn")
+    settings.append(opcion)
 
 
 def _sombrear(cell, hexcolor: str):
@@ -84,9 +120,20 @@ def _sombrear(cell, hexcolor: str):
 
 
 def _celda(cell, texto: str, *, negrita=False, blanco=False, relleno=None):
-    """Escribe texto en una celda con formato uniforme."""
+    """Escribe texto en una celda con formato uniforme, centrado verticalmente."""
     cell.text = texto
-    for run in cell.paragraphs[0].runs:
+    cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+
+    parrafo = cell.paragraphs[0]
+    # El estilo Normal va justificado; dentro de una celda estrecha eso abre huecos
+    # entre las palabras. En tablas se alinea a la izquierda.
+    parrafo.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    pf = parrafo.paragraph_format
+    pf.line_spacing = 1.0          # 1.15 dejaba las filas demasiado altas
+    pf.space_before = Pt(3)
+    pf.space_after = Pt(3)
+
+    for run in parrafo.runs:
         run.font.name = "Calibri"
         run.font.size = Pt(11)
         run.font.bold = negrita
@@ -94,6 +141,48 @@ def _celda(cell, texto: str, *, negrita=False, blanco=False, relleno=None):
         run.font.color.rgb = BLANCO if blanco else GRIS_TEXTO
     if relleno:
         _sombrear(cell, relleno)
+
+
+def _fijar_anchos(tabla, anchos):
+    """
+    Fija el ancho de cada columna.
+
+    Word ignora los anchos si la tabla está en modo autoajuste, así que hay que
+    desactivarlo y declarar `tblLayout=fixed`; sin eso, la columna del valor se
+    estiraba hasta la mitad de la página aunque solo contuviera "48.10".
+    El ancho hay que ponerlo celda por celda: en OOXML el ancho vive en la celda.
+    """
+    tabla.autofit = False
+    tblPr = tabla._tbl.tblPr
+
+    layout = OxmlElement("w:tblLayout")
+    layout.set(qn("w:type"), "fixed")
+    tblPr.append(layout)
+
+    # Margen interno de las celdas: sin esto el texto queda pegado a los bordes.
+    # (Unidades: twips — 1440 por pulgada.)
+    margenes = OxmlElement("w:tblCellMar")
+    for lado, valor in (("top", 60), ("bottom", 60), ("left", 110), ("right", 110)):
+        el = OxmlElement(f"w:{lado}")
+        el.set(qn("w:w"), str(valor))
+        el.set(qn("w:type"), "dxa")
+        margenes.append(el)
+    tblPr.append(margenes)
+
+    for fila in tabla.rows:
+        for i, ancho in enumerate(anchos):
+            fila.cells[i].width = ancho
+
+
+def _espacio(doc: Document, puntos: int = 10):
+    """Un respiro en blanco (p. ej. entre un cuadro y el texto que le sigue)."""
+    p = doc.add_paragraph()
+    p.paragraph_format.space_before = Pt(0)
+    p.paragraph_format.space_after = Pt(0)
+    p.paragraph_format.line_spacing = 1.0
+    for run in p.runs:
+        run.font.size = Pt(puntos)
+    return p
 
 
 def _meta(doc: Document, filas):
@@ -104,10 +193,15 @@ def _meta(doc: Document, filas):
         fila = tabla.add_row()
         _celda(fila.cells[0], etiqueta, negrita=True, relleno=GRIS_META_HEX)
         _celda(fila.cells[1], marcador)
-        fila.cells[0].width = Inches(2.3)
-        fila.cells[1].width = Inches(4.2)
+    _fijar_anchos(tabla, (Inches(2.3), Inches(4.2)))
     doc.add_paragraph()
     return tabla
+
+
+# Ancho útil de la página: 8.5in de papel − 2 × 1in de margen = 6.5in.
+# La segunda columna solo lleva "Sí"/"No" o una nota con 2 decimales ("48.10"),
+# así que se le da lo justo (1.1in) y el resto se lo queda la etiqueta.
+ANCHOS_DATOS = (Inches(5.4), Inches(1.1))
 
 
 def _tabla_datos(doc: Document, encabezados):
@@ -120,15 +214,29 @@ def _tabla_datos(doc: Document, encabezados):
 
 
 def _firmas(doc: Document, columnas):
-    """Bloque de firmas uniforme. columnas: [(titulo, marcador_nombre), ...]."""
+    """
+    Bloque de firma: una línea sobre la que firmar, y debajo el nombre y el cargo.
+
+    Sin tabla: una firma dentro de una celda con bordes se ve como un formulario,
+    no como un documento firmado.
+    """
     doc.add_paragraph()
-    doc.add_heading("Firmas de responsabilidad", level=2)
-    tf = doc.add_table(rows=3, cols=len(columnas))
-    tf.style = "Table Grid"
-    for i, (titulo, marcador) in enumerate(columnas):
-        _celda(tf.rows[0].cells[i], titulo, negrita=True, blanco=True, relleno=AZUL_HEX)
-        tf.rows[1].cells[i].text = "\n\n_______________________"
-        _celda(tf.rows[2].cells[i], marcador, negrita=True)
+    doc.add_heading("Firma de responsabilidad", level=2)
+
+    for titulo, marcador in columnas:
+        # Espacio en blanco para firmar a mano, y encima de la línea nada más
+        hueco = doc.add_paragraph()
+        hueco.paragraph_format.space_before = Pt(36)
+        hueco.paragraph_format.space_after = Pt(0)
+
+        linea = _parrafo(doc, "_______________________________________",
+                         tamano=11, color=GRIS_TEXTO,
+                         alineacion=WD_ALIGN_PARAGRAPH.LEFT, espacio_despues=2)
+        linea.paragraph_format.space_before = Pt(0)
+
+        _parrafo(doc, marcador, tamano=11, negrita=True, color=GRIS_TEXTO,
+                 espacio_despues=0)
+        _parrafo(doc, titulo, tamano=10, color=GRIS_TEXTO, espacio_despues=0)
 
 
 def _add_campo(parrafo, instr: str):
@@ -153,22 +261,39 @@ def _configurar_seccion(doc: Document):
     La carátula (página 1) NO lleva encabezado ni número de página: se usa
     `different_first_page_header_footer`, de modo que la numeración empieza en
     la página 2, como pide el formato institucional.
+
+    Ni el encabezado ni el pie llevan línea divisoria: las únicas líneas del
+    informe son las dos de la carátula.
     """
     section = doc.sections[0]
     section.different_first_page_header_footer = True  # la carátula va limpia
+    section.header_distance = Inches(0.5)
 
-    # Encabezado (desde la página 2): logo a la IZQUIERDA + línea divisoria
+    # Encabezado y pie de la PRIMERA página: existen y van VACÍOS, a propósito.
+    #
+    # Con `titlePg` basta para que Word no pinte nada en la carátula, pero el
+    # visor del navegador (docx-preview) no implementa esa marca: al no encontrar
+    # un encabezado de primera página, caía al encabezado por defecto y pintaba el
+    # logo ahí, encima del que ya lleva el cuerpo de la carátula (salía doble).
+    # Declarándolos vacíos, el visor los usa y la vista previa coincide con Word.
+    section.first_page_header.paragraphs[0].text = ""
+    section.first_page_footer.paragraphs[0].text = ""
+
+    # Encabezado (desde la página 2): logo a la IZQUIERDA, sin línea.
+    #
+    # El aire entre el logo y el primer título se hace con el `space_after` del
+    # propio encabezado, NO subiendo el margen superior de la sección: el margen
+    # aplica también a la carátula y empujaba su logo demasiado abajo.
     header = section.header
     hp = header.paragraphs[0]
     hp.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    hp.paragraph_format.space_after = Pt(18)
     if LOGO.exists():
         hp.add_run().add_picture(str(LOGO), width=Inches(2.4))
-    _borde_inferior(hp)
 
     # Pie de página (desde la página 2): carrera (izq) y número de página (der)
     footer = section.footer
     fp = footer.paragraphs[0]
-    _borde_superior(fp)
     from docx.enum.text import WD_TAB_ALIGNMENT
     from docx.shared import Cm
     fp.paragraph_format.tab_stops.add_tab_stop(Cm(16.5), WD_TAB_ALIGNMENT.RIGHT)
@@ -180,18 +305,20 @@ def _configurar_seccion(doc: Document):
 
 
 def _parrafo(doc, texto, *, tamano=11, negrita=False, color=GRIS_TEXTO,
-             alineacion=WD_ALIGN_PARAGRAPH.LEFT, espacio_antes=0, espacio_despues=6):
-    """Párrafo con formato directo (Calibri, sin cursiva) — usado en la carátula."""
+             alineacion=WD_ALIGN_PARAGRAPH.LEFT, espacio_antes=0, espacio_despues=6,
+             fuente=CALIBRI):
+    """Párrafo con formato directo, sin cursiva — usado en la carátula y el TOC."""
     p = doc.add_paragraph()
     p.alignment = alineacion
     p.paragraph_format.space_before = Pt(espacio_antes)
     p.paragraph_format.space_after = Pt(espacio_despues)
     run = p.add_run(texto)
-    run.font.name = "Calibri"
+    run.font.name = fuente
     run.font.size = Pt(tamano)
     run.font.bold = negrita
     run.font.italic = False
     run.font.color.rgb = color
+    _fijar_fuente(run._r.get_or_add_rPr(), fuente)
     return p
 
 
@@ -208,28 +335,43 @@ def _caratula(doc: Document, tipo: int):
     """
     ordinal = ORDINALES.get(tipo, "")
 
-    _parrafo(doc, f"{ordinal} INFORME DE", tamano=30, negrita=True, color=UPS_BLUE,
-             espacio_despues=0)
-    _parrafo(doc, "JEFATURA DE ÁREA DE", tamano=30, negrita=True, color=UPS_BLUE,
-             espacio_despues=0)
-    p = _parrafo(doc, "{{ area_nombre|upper }}", tamano=30, negrita=True, color=UPS_BLUE,
-                 espacio_despues=10)
-    _borde_inferior(p)
+    # El logo va en el CUERPO de la carátula, no en el encabezado.
+    # La página 1 lleva `titlePg` (sin encabezado, sin número de página), así que
+    # el logo del encabezado —el que se ve de la página 2 en adelante— no aparece
+    # aquí. Word lo omite correctamente; el visor del navegador (docx-preview) no
+    # implementa `titlePg` y lo pintaba igual, y de ahí que la vista previa y el
+    # Word descargado no coincidieran.
+    if LOGO.exists():
+        p_logo = doc.add_paragraph()
+        p_logo.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        p_logo.paragraph_format.space_after = Pt(36)
+        p_logo.add_run().add_picture(str(LOGO), width=Inches(2.4))
+
+    _parrafo(doc, f"{ordinal} INFORME DE", tamano=30, negrita=True, color=NEGRO,
+             espacio_despues=0, fuente=CAMBRIA)
+    _parrafo(doc, "JEFATURA DE ÁREA DE", tamano=30, negrita=True, color=NEGRO,
+             espacio_despues=0, fuente=CAMBRIA)
+    p = _parrafo(doc, "{{ area_nombre|upper }}", tamano=30, negrita=True, color=NEGRO,
+                 espacio_despues=10, fuente=CAMBRIA)
+    _borde_inferior(p)   # las únicas líneas del informe van aquí, en la carátula
 
     _parrafo(doc, "CORRESPONDIENTE AL PERIODO {{ periodo_numero }}",
-             tamano=13, negrita=True, color=UPS_BLUE, espacio_antes=8, espacio_despues=0)
-    p = _parrafo(doc, "{{ carreras_texto }}", tamano=13, negrita=True, color=UPS_BLUE,
-                 espacio_despues=10)
+             tamano=13, negrita=True, color=NEGRO, espacio_antes=8, espacio_despues=0,
+             fuente=CAMBRIA)
+    p = _parrafo(doc, "{{ carreras_texto }}", tamano=13, negrita=True, color=NEGRO,
+                 espacio_despues=10, fuente=CAMBRIA)
     _borde_inferior(p)
 
     _parrafo(doc, "UNIVERSIDAD POLITÉCNICA SALESIANA",
-             tamano=14, negrita=True, color=UPS_BLUE, espacio_antes=40)
-    _parrafo(doc, "SEDE CUENCA.", tamano=12, negrita=True, color=UPS_BLUE,
-             espacio_antes=10)
+             tamano=14, negrita=True, color=NEGRO, espacio_antes=40, fuente=CAMBRIA)
+    _parrafo(doc, "SEDE CUENCA.", tamano=12, negrita=True, color=NEGRO,
+             espacio_antes=10, fuente=CAMBRIA)
 
     _parrafo(doc, "{{ jefe_titulo }} {{ jefe_nombre }}",
-             tamano=13, negrita=True, color=GRIS_TEXTO, espacio_antes=90, espacio_despues=0)
-    _parrafo(doc, "Jefe de Área de {{ area_nombre }}", tamano=9, color=GRIS_TEXTO)
+             tamano=13, negrita=True, color=NEGRO, espacio_antes=90, espacio_despues=0,
+             fuente=CAMBRIA)
+    _parrafo(doc, "Jefe de Área de {{ area_nombre }}", tamano=9, color=NEGRO,
+             fuente=CAMBRIA)
 
     doc.add_page_break()
 
@@ -270,25 +412,17 @@ def _tabla_contenidos(doc: Document):
     doc.add_page_break()
 
 
-def _borde(parrafo, lado: str):
-    """Agrega un borde (top/bottom) al párrafo (línea divisoria)."""
+def _borde_inferior(parrafo):
+    """Línea divisoria azul bajo el párrafo. Solo se usa en la carátula."""
     p = parrafo._p.get_or_add_pPr()
     pbdr = OxmlElement("w:pBdr")
-    borde = OxmlElement(f"w:{lado}")
+    borde = OxmlElement("w:bottom")
     borde.set(qn("w:val"), "single")
     borde.set(qn("w:sz"), "6")
     borde.set(qn("w:space"), "4")
     borde.set(qn("w:color"), "003DA5")
     pbdr.append(borde)
     p.append(pbdr)
-
-
-def _borde_inferior(parrafo):
-    _borde(parrafo, "bottom")
-
-
-def _borde_superior(parrafo):
-    _borde(parrafo, "top")
 
 
 def _encabezado_institucional(doc: Document, tipo: int, nombre: str):
@@ -299,6 +433,7 @@ def _encabezado_institucional(doc: Document, tipo: int, nombre: str):
       página 3 → título del informe y contenido
     """
     _aplicar_estilos(doc)         # Calibri sin cursiva, headings, interlineado
+    _no_estirar_saltos_de_linea(doc)   # justificado sin huecos en los saltos manuales
     _configurar_seccion(doc)      # logo/pie desde la pág. 2; carátula limpia
 
     _caratula(doc, tipo)          # página 1
@@ -343,7 +478,7 @@ def crear_informe_1():
         doc.add_paragraph("{%p endif %}")
 
     _firmas(doc, [
-        ("Jefe de Área", "{{ jefe_titulo }} {{ jefe_nombre }}"),
+        ("Jefe de Área de {{ area_nombre }}", "{{ jefe_titulo }} {{ jefe_nombre }}"),
     ])
 
     ruta = DIR / "informe_1_plantilla.docx"
@@ -388,6 +523,7 @@ def crear_informe_2():
         fila = tbl.add_row()
         _celda(fila.cells[0], nombre)
         _celda(fila.cells[1], f"{{{{ 'Sí' if item.{campo} else 'No' }}}}")
+    _fijar_anchos(tbl, ANCHOS_DATOS)
     doc.add_paragraph()
     # Sin `if`: el generador nunca deja estos campos vacíos. Cuando no hay nada
     # escrito pone un texto explícito ("No se registraron observaciones."), para que
@@ -407,7 +543,7 @@ def crear_informe_2():
     doc.add_paragraph("{{ acciones_generales_avac }}")
 
     _firmas(doc, [
-        ("Jefe de Área", "{{ jefe_titulo }} {{ jefe_nombre }}"),
+        ("Jefe de Área de {{ area_nombre }}", "{{ jefe_titulo }} {{ jefe_nombre }}"),
     ])
 
     ruta = DIR / "informe_2_plantilla.docx"
@@ -441,6 +577,8 @@ def crear_informe_3():
         fila = tbl.add_row()
         _celda(fila.cells[0], nombre)
         _celda(fila.cells[1], f"{{{{ 'Sí' if v.{campo} else 'No' }}}}")
+    _fijar_anchos(tbl, ANCHOS_DATOS)
+    _espacio(doc)   # el texto no puede arrancar pegado al cuadro
     doc.add_paragraph("Observaciones estudiantes: {{ v.observaciones_estudiantes }}")
     doc.add_paragraph("Observaciones docente: {{ v.observaciones_docente }}")
     doc.add_paragraph(
@@ -452,24 +590,31 @@ def crear_informe_3():
     doc.add_paragraph("{% for c in calificaciones_interciclo %}")
     doc.add_heading("{{ c.asignatura }} — Grupo {{ c.grupo }}", level=3)
     tbl2 = _tabla_datos(doc, ["Indicador", "Valor"])
-    for etiqueta, campo in [
-        ("Total estudiantes", "total_estudiantes"),
-        ("Nota máxima /50", "maximo"),
-        ("Nota mínima /50", "minimo"),
-        ("Promedio /50", "promedio"),
-        ("Mediana /50", "mediana"),
-        ("Rango alto (≥40)", "rango_alto"),
-        ("Rango medio (30-39)", "rango_medio"),
-        ("Rango bajo (<30)", "rango_bajo"),
+    # Las notas se imprimen con el filtro `dec2` (siempre 2 decimales: 48.10, 43.00).
+    # Los conteos de estudiantes van enteros: "25.00 estudiantes" no significa nada.
+    for etiqueta, campo, decimales in [
+        ("Total estudiantes", "total_estudiantes", False),
+        ("Nota máxima /50", "maximo", True),
+        ("Nota mínima /50", "minimo", True),
+        ("Promedio /50", "promedio", True),
+        ("Mediana /50", "mediana", True),
+        ("Rango alto (≥40)", "rango_alto", False),
+        ("Rango medio (30-39)", "rango_medio", False),
+        ("Rango bajo (<30)", "rango_bajo", False),
     ]:
         fila = tbl2.add_row()
         _celda(fila.cells[0], etiqueta, negrita=True, relleno=GRIS_META_HEX)
-        _celda(fila.cells[1], f"{{{{ c.{campo} }}}}")
+        filtro = "|dec2" if decimales else ""
+        _celda(fila.cells[1], f"{{{{ c.{campo}{filtro} }}}}")
+    _fijar_anchos(tbl2, ANCHOS_DATOS)
+    _espacio(doc)
 
     # Gráfico de pastel con la distribución por rango de desempeño
     doc.add_paragraph("{%p if c.grafico %}")
     p_graf = doc.add_paragraph()
     p_graf.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_graf.paragraph_format.space_before = Pt(6)
+    p_graf.paragraph_format.space_after = Pt(14)   # aire bajo el gráfico
     p_graf.add_run("{{ c.grafico }}")
     doc.add_paragraph("{%p endif %}")
 
@@ -484,7 +629,7 @@ def crear_informe_3():
     doc.add_paragraph("{% endfor %}")
 
     _firmas(doc, [
-        ("Jefe de Área", "{{ jefe_titulo }} {{ jefe_nombre }}"),
+        ("Jefe de Área de {{ area_nombre }}", "{{ jefe_titulo }} {{ jefe_nombre }}"),
     ])
 
     ruta = DIR / "informe_3_plantilla.docx"
@@ -540,7 +685,7 @@ def crear_informe_4():
     doc.add_paragraph("{{ acciones_generales_area }}")
 
     _firmas(doc, [
-        ("Jefe de Área", "{{ jefe_titulo }} {{ jefe_nombre }}"),
+        ("Jefe de Área de {{ area_nombre }}", "{{ jefe_titulo }} {{ jefe_nombre }}"),
     ])
 
     ruta = DIR / "informe_4_plantilla.docx"

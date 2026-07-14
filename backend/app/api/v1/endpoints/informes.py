@@ -293,6 +293,10 @@ def descargar_docx(
         path=str(ruta),
         filename=informe.ruta_docx,
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        # Sin esto el navegador cachea la respuesta por su cuenta (no llevaba
+        # ninguna cabecera de caché) y seguía mostrando el .docx de una versión
+        # anterior aunque el informe ya se hubiera regenerado.
+        headers={"Cache-Control": "no-store, must-revalidate", "Pragma": "no-cache"},
     )
 
 

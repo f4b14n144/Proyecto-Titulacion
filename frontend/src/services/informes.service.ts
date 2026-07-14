@@ -27,7 +27,13 @@ export async function obtenerGraficoUrl(informeId: number, nombre: string): Prom
  * Un <a href> normal no envía el header Authorization, por eso daba 401.
  */
 export async function descargarInforme(informeId: number, nombreSugerido?: string): Promise<void> {
-  const res = await api.get(`/informes/${informeId}/descargar`, { responseType: 'blob' })
+  // Mismo cache-busting que la previsualización: sin esto el navegador devolvía
+  // el .docx de una versión anterior del informe.
+  const res = await api.get(`/informes/${informeId}/descargar`, {
+    responseType: 'blob',
+    params: { _t: Date.now() },
+    headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' },
+  })
 
   // Intentar tomar el nombre del header Content-Disposition
   let filename = nombreSugerido ?? `informe_${informeId}.docx`

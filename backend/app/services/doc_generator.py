@@ -28,6 +28,66 @@ def _ruta_plantilla(tipo_informe: int) -> Path:
     return PLANTILLAS_DIR / f"informe_{tipo_informe}_plantilla.docx"
 
 
+def _asegurar_datos_caratula(db: Session, informe: Informe) -> dict:
+    """
+    Garantiza que el informe tenga los datos de la carátula, vengan de donde vengan.
+
+    Un informe puede nacer vacío (p. ej. al guardar el checklist AVAC se crea la
+    fila sin pasar por el generador), y entonces la carátula salía coja: "PERIODO"
+    sin número y sin el texto de carreras. Aquí se rellena lo que falte leyéndolo
+    de la base de datos.
+
+    Solo rellena lo ausente: si el usuario editó un valor desde la UI, ese manda
+    (la editabilidad total del informe es un requisito).
+    """
+    from sqlalchemy.orm.attributes import flag_modified
+    from app.models.area import Area
+    from app.models.consejo import ConsejoCarrera
+    from app.models.jefatura import JefaturaArea
+    from app.models.usuario import Usuario
+    from app.services.generador_informes import _datos_caratula, nombre_para_firma
+
+    contenido = dict(informe.contenido_json or {})
+
+    consejo = db.query(ConsejoCarrera).filter(ConsejoCarrera.id == informe.consejo_id).first()
+    periodo = consejo.periodo if consejo else None
+    area = db.query(Area).filter(Area.id == informe.area_id).first()
+
+    jefe = None
+    if consejo:
+        jefe = (
+            db.query(Usuario)
+            .join(JefaturaArea, JefaturaArea.usuario_id == Usuario.id)
+            .filter(
+                JefaturaArea.area_id == informe.area_id,
+                JefaturaArea.periodo_id == consejo.periodo_id,
+            )
+            .first()
+        )
+
+    faltantes = {
+        **_datos_caratula(periodo),
+        "periodo_nombre": periodo.nombre if periodo else "",
+        "area_nombre": area.nombre if area else "",
+        "jefe_nombre": nombre_para_firma(jefe.nombre_completo) if jefe else "",
+        "jefe_titulo": (jefe.titulo or "") if jefe else "",
+    }
+
+    cambio = False
+    for clave, valor in faltantes.items():
+        if not contenido.get(clave) and valor:
+            contenido[clave] = valor
+            cambio = True
+
+    if cambio:
+        informe.contenido_json = contenido
+        flag_modified(informe, "contenido_json")   # sin esto la columna JSON no se guarda
+        db.commit()
+        logger.info(f"Informe {informe.id}: datos de carátula completados desde la BD")
+
+    return contenido
+
+
 def generar_docx(db: Session, informe: Informe) -> str:
     """
     Genera el .docx para el informe usando su contenido_json.
@@ -36,7 +96,7 @@ def generar_docx(db: Session, informe: Informe) -> str:
     Si no existe plantilla real, genera un .docx básico de texto.
     """
     plantilla_ruta = _ruta_plantilla(informe.tipo_informe)
-    contenido = informe.contenido_json or {}
+    contenido = _asegurar_datos_caratula(db, informe)
 
     nombre_archivo = (
         f"informe_{informe.tipo_informe}"
@@ -47,7 +107,8 @@ def generar_docx(db: Session, informe: Informe) -> str:
     ruta_salida = DOCX_OUTPUT_DIR / nombre_archivo
 
     if plantilla_ruta.exists():
-        _generar_desde_plantilla(plantilla_ruta, contenido, ruta_salida)
+        graficos = _generar_desde_plantilla(plantilla_ruta, contenido, ruta_salida, informe)
+        _guardar_rutas_graficos(db, informe, graficos)
     else:
         logger.warning(
             f"Plantilla {plantilla_ruta} no encontrada — generando .docx básico"
@@ -82,14 +143,29 @@ def _aplanar_contexto(contenido: dict) -> dict:
     return contexto
 
 
-def _incrustar_graficos(doc: DocxTemplate, contexto: dict) -> None:
-    """
-    Convierte las rutas de gráficos guardadas en `contenido_json` en imágenes
-    incrustables. La plantilla las imprime con `{{ c.grafico }}`.
+def _entero(valor) -> int:
+    """Un conteo del contenido_json. Tras editarlo en la UI puede llegar como texto."""
+    try:
+        return int(float(valor))
+    except (TypeError, ValueError):
+        return 0
 
-    Si el archivo no existe (p. ej. se regenera un informe antiguo) se deja el
-    hueco vacío en vez de romper la generación.
+
+def _incrustar_graficos(doc: DocxTemplate, contexto: dict, informe: Informe) -> None:
     """
+    Redibuja el gráfico de cada asignatura y lo incrusta. `{{ c.grafico }}`.
+
+    El PNG se **vuelve a dibujar en cada generación**, a partir de los rangos que
+    tenga el `contenido_json` en ese momento. Antes se guardaba una sola vez al
+    crear el informe y el .docx reusaba ese archivo: si el usuario corregía el
+    reparto alto/medio/bajo desde el editor, la tabla cambiaba pero el pastel
+    seguía mostrando los números viejos.
+
+    Si un item no da para gráfico (menos de dos rangos con datos), se deja el
+    hueco vacío en lugar de romper la generación.
+    """
+    from app.services.graficos import grafico_rangos_interciclo, guardar_png
+
     originales = contexto.get("calificaciones_interciclo") or []
     if not originales:
         return
@@ -97,29 +173,94 @@ def _incrustar_graficos(doc: DocxTemplate, contexto: dict) -> None:
     # Copiar cada item: si mutáramos los originales, los objetos InlineImage
     # acabarían dentro de contenido_json y no son serializables a JSON.
     copias = []
-    for item in originales:
+    for idx, item in enumerate(originales):
         copia = dict(item)
-        nombre = copia.get("grafico_ruta")
-        if nombre:
-            ruta = GRAFICOS_DIR / nombre
-            if ruta.exists():
-                copia["grafico"] = InlineImage(doc, str(ruta), width=Inches(5.4))
-            else:
-                logger.warning(f"Gráfico no encontrado: {ruta}")
-                copia["grafico"] = ""
+        rangos = {
+            "rango_alto": _entero(copia.get("rango_alto")),
+            "rango_medio": _entero(copia.get("rango_medio")),
+            "rango_bajo": _entero(copia.get("rango_bajo")),
+        }
+        titulo = f"{copia.get('asignatura', '')} — Grupo {copia.get('grupo', '')}".strip(" —")
+        png = grafico_rangos_interciclo(rangos, titulo)
+
+        if png:
+            nombre = copia.get("grafico_ruta") or f"informe{informe.id}_interciclo_{idx}.png"
+            guardar_png(png, GRAFICOS_DIR / nombre)
+            copia["grafico_ruta"] = nombre
+            copia["grafico"] = InlineImage(doc, str(GRAFICOS_DIR / nombre), width=Inches(5.4))
+        else:
+            copia["grafico"] = ""
+
         copias.append(copia)
+
     contexto["calificaciones_interciclo"] = copias
 
 
+def _dos_decimales(valor):
+    """
+    Filtro Jinja `dec2`: fuerza dos decimales en las notas de las tablas.
+
+    Se aplica al imprimir y no al calcular, porque los valores son editables: si
+    el usuario corrige un promedio a "43.7", el informe igual debe mostrar 43.70.
+    Lo que no sea número se devuelve tal cual (p. ej. un "—").
+    """
+    try:
+        return f"{float(valor):.2f}"
+    except (TypeError, ValueError):
+        return valor
+
+
+def _entorno_jinja() -> "Environment":
+    from jinja2 import Environment
+
+    env = Environment()
+    env.filters["dec2"] = _dos_decimales
+    return env
+
+
+def _guardar_rutas_graficos(db: Session, informe: Informe, graficos: dict[int, str]) -> None:
+    """
+    Persiste en `contenido_json` el nombre del PNG de cada asignatura.
+
+    Hace falta porque `GET /informes/{id}/grafico/{nombre}` solo sirve nombres
+    declarados en el propio `contenido_json` (es lo que impide el path traversal).
+    """
+    if not graficos:
+        return
+    from sqlalchemy.orm.attributes import flag_modified
+
+    contenido = dict(informe.contenido_json or {})
+    items = [dict(x) for x in (contenido.get("calificaciones_interciclo") or [])]
+    cambio = False
+    for idx, nombre in graficos.items():
+        if idx < len(items) and items[idx].get("grafico_ruta") != nombre:
+            items[idx]["grafico_ruta"] = nombre
+            cambio = True
+    if cambio:
+        contenido["calificaciones_interciclo"] = items
+        informe.contenido_json = contenido
+        flag_modified(informe, "contenido_json")
+
+
 def _generar_desde_plantilla(
-    plantilla_ruta: Path, contexto: dict, ruta_salida: Path
-) -> None:
-    """Renderiza la plantilla Jinja2 .docx con el contexto dado."""
+    plantilla_ruta: Path, contexto: dict, ruta_salida: Path, informe: Informe
+) -> dict[int, str]:
+    """
+    Renderiza la plantilla Jinja2 .docx con el contexto dado.
+
+    Devuelve {índice de asignatura: nombre del PNG} de los gráficos dibujados.
+    """
     doc = DocxTemplate(str(plantilla_ruta))
     aplanado = _aplanar_contexto(contexto)
-    _incrustar_graficos(doc, aplanado)
-    doc.render(aplanado)
+    _incrustar_graficos(doc, aplanado, informe)
+    doc.render(aplanado, _entorno_jinja())
     doc.save(str(ruta_salida))
+
+    return {
+        idx: item["grafico_ruta"]
+        for idx, item in enumerate(aplanado.get("calificaciones_interciclo") or [])
+        if item.get("grafico_ruta")
+    }
 
 
 def _generar_docx_basico(informe: Informe, contenido: dict, ruta_salida: Path) -> None:
