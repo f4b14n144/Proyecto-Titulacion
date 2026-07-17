@@ -38,6 +38,11 @@ class Settings(BaseSettings):
     APP_NAME: str = "Sistema Informes UPS"
     ENVIRONMENT: str = "development"
 
+    # URL pública del sistema. Se usa en los correos para enlazar al panel donde
+    # el docente registra sus observaciones. En producción, el dominio real
+    # (p. ej. https://informes.ups.edu.ec).
+    APP_URL: str = "http://localhost"
+
     # Orígenes permitidos por CORS, separados por comas.
     # En producción hay que poner el dominio real (p. ej. https://informes.ups.edu.ec).
     CORS_ORIGINS: str = "http://localhost:5173,http://localhost"

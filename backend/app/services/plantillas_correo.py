@@ -279,11 +279,13 @@ def correo_recordatorio_docente(
     nombre: str,
     materias: list[str],
     fecha_entrega: str,
+    url_sistema: str,
 ) -> tuple[str, str]:
     """Recordatorio al docente: registrar sus aportes antes de que cierre el informe."""
     asunto = f"Recordatorio: observaciones y acciones de mejora — hasta el {fecha_entrega}"
 
     listado = _lista([escape(m) for m in materias]) if materias else ""
+    url = escape(url_sistema)
 
     cuerpo = (
         _p(f"Estimado/a {_tratamiento(titulo)}{escape(nombre)}:")
@@ -300,6 +302,14 @@ def correo_recordatorio_docente(
             "Puede registrarlas ingresando al sistema, en las secciones "
             "<strong>Observaciones</strong> y <strong>Acciones de mejora</strong> de su panel. "
             "Cada registro se acumula, de modo que puede añadir varios a lo largo del período."
+        )
+        + _p(
+            "En caso de que lo considere pertinente, puede ingresar sus sugerencias en el "
+            f'siguiente enlace: <a href="{url}">{url}</a>.'
+        )
+        + _p(
+            "Si aún no cuenta con una cuenta en el sistema, puede solicitarla en la "
+            "Dirección de Carrera."
         )
         + _p(
             "Su aporte constituye un insumo de gran valor para el análisis y el fortalecimiento "

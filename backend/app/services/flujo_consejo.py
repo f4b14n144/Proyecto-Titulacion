@@ -3,9 +3,11 @@ Orquestador del flujo automático de un Consejo de Carrera.
 
 Pasos:
   1. Cambiar estado a PROCESANDO
-  2. Enviar emails a docentes y estudiantes
-  3. (Sprint 3) Generar borradores de informes con IA
-  4. Cambiar estado a COMPLETADO
+  2. Enviar emails a los docentes (solicitud de observaciones sobre sus materias)
+  3. Cambiar estado a COMPLETADO
+
+Los correos a estudiantes NO son automáticos: se envían manualmente desde
+`/correos/estudiantes`. Aquí solo se notifica a los docentes.
 """
 from loguru import logger
 from sqlalchemy.orm import Session

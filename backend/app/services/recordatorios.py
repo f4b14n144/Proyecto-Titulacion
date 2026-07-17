@@ -3,9 +3,11 @@ Recordatorios de entrega de informes.
 
 Dos días antes de la fecha de entrega de cada informe, el planificador avisa por
 correo a:
-  - los **jefes de área**, que son quienes elaboran el informe
-  - los **docentes**, para que registren sus observaciones y acciones de mejora
-    antes de que el informe se cierre
+  - los **jefes de área**, que elaboran el informe. Se les avisa de los **cuatro**.
+  - los **docentes**, pero **solo para los informes 3 y 4**, que son los únicos
+    donde se integran sus observaciones y acciones de mejora. Para el Informe 1
+    (dirección) y el 2 (checklist AVAC del jefe) el docente no aporta nada, así
+    que no se le molesta.
 
 Las fechas las fija la Dirección de Carrera en cada Consejo (una por informe).
 """
@@ -26,8 +28,14 @@ from app.models.usuario import Usuario
 from app.services import plantillas_correo as plantillas
 from app.services.mail_service import enviar_email
 
+from app.core.config import settings
+
 # Días de antelación del recordatorio
 DIAS_ANTES = 2
+
+# Informes cuyo contenido integra los aportes del docente: solo a estos se le
+# recuerda al docente que registre sus observaciones. (3 = interciclo, 4 = final)
+INFORMES_CON_APORTE_DOCENTE = (3, 4)
 
 
 def _formatear(f: date) -> str:
@@ -87,6 +95,7 @@ def _correos_a_docentes(db: Session, consejo: ConsejoCarrera, fecha: str) -> lis
             nombre=docente.nombre_completo,
             materias=sorted(entrada["materias"]),
             fecha_entrega=fecha,
+            url_sistema=settings.APP_URL,
         )
         correos.append({
             "destinatario": docente.email_institucional,
@@ -118,10 +127,13 @@ def preparar_recordatorios(
         return []
 
     fecha = _formatear(fila.fecha_entrega)
-    return (
-        _correos_a_jefes(db, consejo, tipo_informe, fecha)
-        + _correos_a_docentes(db, consejo, fecha)
-    )
+
+    # Los jefes reciben aviso de los 4 informes; los docentes, solo de aquellos
+    # donde su aporte se integra (3 y 4).
+    correos = _correos_a_jefes(db, consejo, tipo_informe, fecha)
+    if tipo_informe in INFORMES_CON_APORTE_DOCENTE:
+        correos += _correos_a_docentes(db, consejo, fecha)
+    return correos
 
 
 def enviar_recordatorios(db: Session, consejo_id: int, tipo_informe: int) -> dict:
