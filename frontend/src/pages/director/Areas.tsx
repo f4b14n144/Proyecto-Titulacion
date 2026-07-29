@@ -11,12 +11,15 @@ export default function Areas() {
   const [nombre, setNombre] = useState('')
   const [guardando, setGuardando] = useState(false)
   const [errorForm, setErrorForm] = useState('')
+  const [verInactivas, setVerInactivas] = useState(false)
 
   const cargar = async () => {
     setCargando(true)
     setError('')
     try {
-      const { data } = await api.get<ApiResponse<Area[]>>('/areas/')
+      const { data } = await api.get<ApiResponse<Area[]>>('/areas/', {
+        params: verInactivas ? { incluir_inactivas: true } : {},
+      })
       setAreas(data.data)
     } catch {
       setError('No se pudieron cargar las áreas.')
@@ -25,7 +28,7 @@ export default function Areas() {
     }
   }
 
-  useEffect(() => { cargar() }, [])
+  useEffect(() => { cargar() }, [verInactivas])
 
   const abrirCrear = () => {
     setEditando(null)
@@ -64,13 +67,27 @@ export default function Areas() {
   }
 
   const eliminar = async (a: Area) => {
-    if (!confirm(`¿Eliminar el área "${a.nombre}"?`)) return
+    if (!confirm(
+      `¿Eliminar el área "${a.nombre}"?\n\n` +
+      'Si el área ya tiene materias, informes o jefaturas, no se borra: se ' +
+      'desactiva (sale del catálogo pero se conserva en el histórico).'
+    )) return
     try {
-      await api.delete(`/areas/${a.id}`)
+      const { data } = await api.delete<ApiResponse<null>>(`/areas/${a.id}`)
       await cargar()
+      if (data.message) alert(data.message)
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
       alert(msg ?? 'No se pudo eliminar.')
+    }
+  }
+
+  const cambiarEstado = async (a: Area, activa: boolean) => {
+    try {
+      await api.put(`/areas/${a.id}/activa`, null, { params: { activa } })
+      await cargar()
+    } catch {
+      alert('No se pudo cambiar el estado del área.')
     }
   }
 
@@ -89,6 +106,11 @@ export default function Areas() {
         </button>
       </div>
 
+      <label className="flex items-center gap-2 text-sm text-gray-600 mb-4 cursor-pointer w-fit">
+        <input type="checkbox" checked={verInactivas} onChange={(e) => setVerInactivas(e.target.checked)} />
+        Mostrar áreas desactivadas
+      </label>
+
       {error && <div className="bg-red-50 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm">{error}</div>}
 
       {cargando ? (
@@ -102,11 +124,22 @@ export default function Areas() {
               No hay áreas registradas.
             </div>
           ) : areas.map((a) => (
-            <div key={a.id} className="bg-white rounded-xl border p-4 flex items-center justify-between">
-              <span className="font-medium text-gray-800">{a.nombre}</span>
+            <div key={a.id} className={`bg-white rounded-xl border p-4 flex items-center justify-between ${a.activa === false ? 'opacity-60' : ''}`}>
+              <span className="font-medium text-gray-800 flex items-center gap-2">
+                {a.nombre}
+                {a.activa === false && (
+                  <span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-200 text-gray-600">Desactivada</span>
+                )}
+              </span>
               <div className="flex gap-2">
-                <button onClick={() => abrirEditar(a)} className="text-ups-blue hover:underline text-xs">Editar</button>
-                <button onClick={() => eliminar(a)} className="text-red-500 hover:underline text-xs">Eliminar</button>
+                {a.activa === false ? (
+                  <button onClick={() => cambiarEstado(a, true)} className="text-green-600 hover:underline text-xs">Reactivar</button>
+                ) : (
+                  <>
+                    <button onClick={() => abrirEditar(a)} className="text-ups-blue hover:underline text-xs">Editar</button>
+                    <button onClick={() => eliminar(a)} className="text-red-500 hover:underline text-xs">Eliminar</button>
+                  </>
+                )}
               </div>
             </div>
           ))}

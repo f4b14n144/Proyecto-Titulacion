@@ -1,7 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from app.core.deps import get_db, require_role
 from app.models.area import Area
+from app.models.asignatura import Asignatura
 from app.models.usuario import Usuario
 from app.schemas.area import AreaCreate, AreaUpdate, AreaOut
 
@@ -15,10 +17,16 @@ _lectura_compartida = require_role("DIRECTOR_CARRERA", "JEFE_AREA")
 
 @router.get("/", response_model=dict)
 def listar_areas(
+    incluir_inactivas: bool = Query(False),
     db: Session = Depends(get_db),
     _: Usuario = Depends(_lectura_compartida),
 ):
-    areas = db.query(Area).order_by(Area.nombre).all()
+    """Áreas del catálogo. Por defecto solo las activas; `incluir_inactivas=true`
+    trae también las desactivadas (para gestionarlas o ver el histórico)."""
+    q = db.query(Area)
+    if not incluir_inactivas:
+        q = q.filter(Area.activa.is_(True))
+    areas = q.order_by(Area.nombre).all()
     return {"data": [AreaOut.model_validate(a) for a in areas], "message": "OK", "success": True}
 
 
@@ -65,23 +73,48 @@ def eliminar_area(
     db: Session = Depends(get_db),
     _: Usuario = Depends(_solo_director),
 ):
+    """
+    "Elimina" un área. Si tiene histórico (asignaturas, informes o jefaturas) se
+    **desactiva** para no romperlo — antes se intentaba borrar y la llave foránea
+    de los informes daba error 500. Si nunca se usó, se borra de verdad.
+    """
+    from app.models.informe import Informe
+    from app.models.jefatura import JefaturaArea
+
     area = db.query(Area).filter(Area.id == area_id).first()
     if not area:
         raise HTTPException(status_code=404, detail="Área no encontrada")
 
-    if area.asignaturas:
-        raise HTTPException(
-            status_code=400,
-            detail="No se puede eliminar un área con asignaturas asociadas",
-        )
+    tiene_asignaturas = db.query(Asignatura).filter(Asignatura.area_id == area_id).count() > 0
+    tiene_informes = db.query(Informe).filter(Informe.area_id == area_id).count() > 0
+    tiene_jefaturas = db.query(JefaturaArea).filter(JefaturaArea.area_id == area_id).count() > 0
 
-    # Borrar las jefaturas del área junto con ella. Sin esto quedaban huérfanas
-    # (apuntando a un área inexistente): no se veían en la lista pero seguían
-    # bloqueando la reasignación de ese docente, porque un docente solo puede
-    # dirigir un área por período (UNIQUE usuario_id, periodo_id).
-    from app.models.jefatura import JefaturaArea
-    db.query(JefaturaArea).filter(JefaturaArea.area_id == area_id).delete()
+    if tiene_asignaturas or tiene_informes or tiene_jefaturas:
+        area.activa = False
+        db.commit()
+        return {
+            "data": None,
+            "message": "El área tiene datos asociados: se desactivó (sale del catálogo pero se conserva en el histórico)",
+            "success": True,
+        }
 
     db.delete(area)
     db.commit()
     return {"data": None, "message": "Área eliminada", "success": True}
+
+
+@router.put("/{area_id}/activa", response_model=dict)
+def cambiar_estado_area(
+    area_id: int,
+    activa: bool = Query(...),
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(_solo_director),
+):
+    """Activa o desactiva un área (sacarla del catálogo o reincorporarla)."""
+    area = db.query(Area).filter(Area.id == area_id).first()
+    if not area:
+        raise HTTPException(status_code=404, detail="Área no encontrada")
+    area.activa = activa
+    db.commit()
+    db.refresh(area)
+    return {"data": AreaOut.model_validate(area), "message": f"Área {'activada' if activa else 'desactivada'}", "success": True}

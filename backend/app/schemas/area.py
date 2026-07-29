@@ -14,3 +14,4 @@ class AreaOut(BaseModel):
 
     id: int
     nombre: str
+    activa: bool = True

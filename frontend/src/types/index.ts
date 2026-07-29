@@ -43,6 +43,7 @@ export interface PeriodoAcademico {
 export interface Area {
   id: number
   nombre: string
+  activa?: boolean
 }
 
 export interface Rol {
