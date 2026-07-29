@@ -209,15 +209,27 @@ def obtener_o_crear_contenido_direccion(db: Session, consejo_id: int) -> Conteni
         .filter(ContenidoConsejo.consejo_id == consejo_id)
         .first()
     )
-    if contenido:
-        return contenido
 
     consejo = db.query(ConsejoCarrera).filter(ConsejoCarrera.id == consejo_id).first()
     if consejo is None:
         raise ValueError(f"Consejo {consejo_id} no existe")
 
+    # Las designaciones son un dato DERIVADO de la tabla de jefaturas, no texto
+    # editorial de la dirección: deben reflejar siempre quién es jefe ahora. Por
+    # eso se re-sincronizan aunque el contenido ya existiera (antes quedaban
+    # congeladas con los jefes de cuando se creó el contenido, y al cambiar una
+    # jefatura el Informe 1 seguía mostrando la designación vieja).
+    designaciones = _designaciones_jefes(db, consejo.periodo_id)
+
+    if contenido:
+        if (contenido.secciones or {}).get("designaciones") != designaciones:
+            contenido.secciones = {**(contenido.secciones or {}), "designaciones": designaciones}
+            flag_modified(contenido, "secciones")
+            db.commit()
+        return contenido
+
     secciones = {campo: "" for campo in SECCIONES_DIRECCION}
-    secciones["designaciones"] = _designaciones_jefes(db, consejo.periodo_id)
+    secciones["designaciones"] = designaciones
 
     contenido = ContenidoConsejo(
         consejo_id=consejo_id,
