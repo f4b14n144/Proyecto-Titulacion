@@ -264,8 +264,27 @@ def actualizar_contenido_direccion(
         contenido.nombre_director = payload.nombre_director
     flag_modified(contenido, "secciones")
     db.commit()
+
+    # Propagar el cambio a los Informe 1 que ya existan. Cada uno guarda una COPIA
+    # de este contenido (es de solo lectura para el jefe); sin regenerarlos, cada
+    # área seguiría mostrando la versión anterior a esta edición. `generar_informe_1`
+    # conserva el aporte propio de cada jefe, así que la propagación es segura.
+    # (No se regenera el .docx: eso queda bajo demanda, como en el resto del sistema.)
+    from app.models.informe import Informe
+    from app.services.generador_informes import generar_informe_1
+
+    informes_area = (
+        db.query(Informe)
+        .filter(Informe.consejo_id == consejo_id, Informe.tipo_informe == 1)
+        .all()
+    )
+    for inf in informes_area:
+        generar_informe_1(db, consejo_id, inf.area_id)
+
     return {
         "data": _contenido_out(contenido),
-        "message": "Contenido de dirección actualizado",
+        "message": (
+            f"Contenido de dirección actualizado y propagado a {len(informes_area)} informe(s) de área"
+        ),
         "success": True,
     }
