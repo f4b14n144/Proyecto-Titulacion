@@ -22,7 +22,13 @@ export const authService = {
   async subirFoto(archivo: File): Promise<string> {
     const form = new FormData()
     form.append('archivo', archivo)
-    const { data } = await api.post('/auth/foto', form)
+    // El Content-Type lo debe fijar axios con el boundary del multipart. Sin este
+    // override se hereda el 'application/json' por defecto de la instancia y el
+    // backend no encuentra el campo `archivo` (responde 422). Es el mismo patron
+    // que usan las subidas de Excel.
+    const { data } = await api.post('/auth/foto', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
     return data.data.foto as string
   },
 
