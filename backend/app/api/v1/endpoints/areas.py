@@ -75,6 +75,13 @@ def eliminar_area(
             detail="No se puede eliminar un área con asignaturas asociadas",
         )
 
+    # Borrar las jefaturas del área junto con ella. Sin esto quedaban huérfanas
+    # (apuntando a un área inexistente): no se veían en la lista pero seguían
+    # bloqueando la reasignación de ese docente, porque un docente solo puede
+    # dirigir un área por período (UNIQUE usuario_id, periodo_id).
+    from app.models.jefatura import JefaturaArea
+    db.query(JefaturaArea).filter(JefaturaArea.area_id == area_id).delete()
+
     db.delete(area)
     db.commit()
     return {"data": None, "message": "Área eliminada", "success": True}
