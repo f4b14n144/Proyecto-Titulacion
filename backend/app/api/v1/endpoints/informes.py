@@ -82,15 +82,19 @@ def _puede_editar(db: Session, usuario: Usuario, informe: Informe) -> None:
     raise HTTPException(status_code=403, detail="No puedes editar este informe")
 
 
-def _mapa_area_jefe(db: Session) -> dict[int, Usuario]:
-    """area_id → jefe de esa área (según su jefatura vigente)."""
+def _mapa_area_jefes(db: Session) -> dict[int, list[Usuario]]:
+    """area_id → lista de jefes de esa área (un área puede tener hasta 2)."""
     from app.models.jefatura import JefaturaArea
     filas = (
         db.query(JefaturaArea.area_id, Usuario)
         .join(Usuario, JefaturaArea.usuario_id == Usuario.id)
+        .order_by(JefaturaArea.id)
         .all()
     )
-    return {area_id: jefe for area_id, jefe in filas}
+    mapa: dict[int, list[Usuario]] = {}
+    for area_id, jefe in filas:
+        mapa.setdefault(area_id, []).append(jefe)
+    return mapa
 
 
 @router.get("/", response_model=dict)
@@ -127,16 +131,16 @@ def listar_informes(
 
     from app.models.area import Area
     areas = {a.id: a.nombre for a in db.query(Area).all()}
-    jefes = _mapa_area_jefe(db)
+    jefes = _mapa_area_jefes(db)
 
     data = []
     for i in informes:
         out = InformeOut.model_validate(i)
         out.area_nombre = areas.get(i.area_id)
-        jefe = jefes.get(i.area_id)
-        if jefe:
-            out.jefe_id = jefe.id
-            out.jefe_nombre = jefe.nombre_completo
+        lista_jefes = jefes.get(i.area_id, [])
+        if lista_jefes:
+            out.jefe_id = lista_jefes[0].id  # el primero, para el filtro por jefe
+            out.jefe_nombre = ", ".join(j.nombre_completo for j in lista_jefes)
         data.append(out)
 
     return {"data": data, "message": "OK", "success": True}
@@ -161,9 +165,10 @@ def obtener_informe(
     area = db.query(Area).filter(Area.id == informe.area_id).first()
     out = InformeOut.model_validate(informe)
     out.area_nombre = area.nombre if area else None
-    jefe = _mapa_area_jefe(db).get(informe.area_id)
-    if jefe:
-        out.jefe_id, out.jefe_nombre = jefe.id, jefe.nombre_completo
+    lista_jefes = _mapa_area_jefes(db).get(informe.area_id, [])
+    if lista_jefes:
+        out.jefe_id = lista_jefes[0].id
+        out.jefe_nombre = ", ".join(j.nombre_completo for j in lista_jefes)
     return {"data": out, "message": "OK", "success": True}
 
 
