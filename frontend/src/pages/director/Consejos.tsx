@@ -19,6 +19,14 @@ const formVacio: FormData = {
   fecha_activacion: '',
 }
 
+/** Resta días a una fecha 'YYYY-MM-DD' y devuelve otra 'YYYY-MM-DD'. */
+function restarDias(fecha: string, dias: number): string {
+  if (!fecha) return ''
+  const d = new Date(fecha + 'T00:00:00')
+  d.setDate(d.getDate() - dias)
+  return d.toISOString().slice(0, 10)
+}
+
 const ESTADOS_COLOR: Record<string, string> = {
   PENDIENTE: 'bg-yellow-100 text-yellow-700',
   PROCESANDO: 'bg-blue-100 text-blue-700',
@@ -83,10 +91,6 @@ export default function Consejos() {
   const guardar = async () => {
     if (!form.periodo_id || !form.fecha_consejo || !form.fecha_limite_informe) {
       setErrorForm('Período, fecha del consejo y fecha límite son obligatorios.')
-      return
-    }
-    if (form.fecha_limite_informe < form.fecha_consejo) {
-      setErrorForm('La fecha límite no puede ser anterior a la del consejo.')
       return
     }
     setGuardando(true)
@@ -257,13 +261,21 @@ export default function Consejos() {
                 <input
                   type="date"
                   value={form.fecha_consejo}
-                  onChange={(e) => setForm({ ...form, fecha_consejo: e.target.value })}
+                  onChange={(e) => {
+                    // Al elegir la fecha del consejo, la fecha límite se rellena
+                    // sola 2 días antes (se puede cambiar después).
+                    const fc = e.target.value
+                    setForm({ ...form, fecha_consejo: fc, fecha_limite_informe: restarDias(fc, 2) })
+                  }}
                   className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ups-blue"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Fecha límite del informe</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Fecha límite del informe{' '}
+                  <span className="text-gray-400 font-normal">(2 días antes del consejo, automática — editable)</span>
+                </label>
                 <input
                   type="date"
                   value={form.fecha_limite_informe}

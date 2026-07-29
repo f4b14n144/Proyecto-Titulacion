@@ -12,6 +12,9 @@ from app.schemas.consejo import ConsejoCreate, ConsejoUpdate, ConsejoOut
 
 router = APIRouter()
 
+# La fecha límite de los informes va estos días antes de la fecha del consejo.
+DIAS_ANTES_LIMITE = 2
+
 _solo_director = require_role("DIRECTOR_CARRERA")
 # La lista de consejos la necesitan los tres roles: el docente elige un consejo para
 # registrar sus aportes. (El nombre anterior, `_director_o_jefe`, engañaba: incluía
@@ -45,7 +48,12 @@ def crear_consejo(
     if not db.query(PeriodoAcademico).filter(PeriodoAcademico.id == payload.periodo_id).first():
         raise HTTPException(status_code=404, detail="Período no encontrado")
 
-    consejo = ConsejoCarrera(**payload.model_dump())
+    datos = payload.model_dump()
+    # La fecha límite va 2 días antes del consejo si no se indicó otra
+    if datos.get("fecha_limite_informe") is None:
+        datos["fecha_limite_informe"] = payload.fecha_consejo - timedelta(days=DIAS_ANTES_LIMITE)
+
+    consejo = ConsejoCarrera(**datos)
     db.add(consejo)
     db.commit()
     db.refresh(consejo)
