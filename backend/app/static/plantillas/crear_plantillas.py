@@ -213,30 +213,40 @@ def _tabla_datos(doc: Document, encabezados):
     return tbl
 
 
-def _firmas(doc: Document, columnas):
+def _bloque_firma(doc: Document, marcador_nombre: str, marcador_cargo: str):
+    """Una firma: espacio en blanco, línea, nombre y cargo."""
+    hueco = doc.add_paragraph()
+    hueco.paragraph_format.space_before = Pt(36)
+    hueco.paragraph_format.space_after = Pt(0)
+
+    linea = _parrafo(doc, "_______________________________________",
+                     tamano=11, color=GRIS_TEXTO,
+                     alineacion=WD_ALIGN_PARAGRAPH.LEFT, espacio_despues=2)
+    linea.paragraph_format.space_before = Pt(0)
+
+    _parrafo(doc, marcador_nombre, tamano=11, negrita=True, color=GRIS_TEXTO,
+             espacio_despues=0)
+    _parrafo(doc, marcador_cargo, tamano=10, color=GRIS_TEXTO, espacio_despues=0)
+
+
+def _firmas_jefes(doc: Document):
     """
-    Bloque de firma: una línea sobre la que firmar, y debajo el nombre y el cargo.
+    Firmas de los jefes del área (hasta 2). La primera siempre; la segunda solo si
+    el área tiene un segundo jefe (`{%p if jefe2_nombre %}`).
 
     Sin tabla: una firma dentro de una celda con bordes se ve como un formulario,
     no como un documento firmado.
     """
     doc.add_paragraph()
-    doc.add_heading("Firma de responsabilidad", level=2)
+    doc.add_heading("Firma(s) de responsabilidad", level=2)
 
-    for titulo, marcador in columnas:
-        # Espacio en blanco para firmar a mano, y encima de la línea nada más
-        hueco = doc.add_paragraph()
-        hueco.paragraph_format.space_before = Pt(36)
-        hueco.paragraph_format.space_after = Pt(0)
+    _bloque_firma(doc, "{{ jefe_titulo }} {{ jefe_nombre }}",
+                  "{{ jefe_cargo_prefijo }} {{ area_nombre }}")
 
-        linea = _parrafo(doc, "_______________________________________",
-                         tamano=11, color=GRIS_TEXTO,
-                         alineacion=WD_ALIGN_PARAGRAPH.LEFT, espacio_despues=2)
-        linea.paragraph_format.space_before = Pt(0)
-
-        _parrafo(doc, marcador, tamano=11, negrita=True, color=GRIS_TEXTO,
-                 espacio_despues=0)
-        _parrafo(doc, titulo, tamano=10, color=GRIS_TEXTO, espacio_despues=0)
+    doc.add_paragraph("{%p if jefe2_nombre %}")
+    _bloque_firma(doc, "{{ jefe2_titulo }} {{ jefe2_nombre }}",
+                  "{{ jefe_cargo_prefijo }} {{ area_nombre }}")
+    doc.add_paragraph("{%p endif %}")
 
 
 def _add_campo(parrafo, instr: str):
@@ -370,7 +380,12 @@ def _caratula(doc: Document, tipo: int):
     _parrafo(doc, "{{ jefe_titulo }} {{ jefe_nombre }}",
              tamano=13, negrita=True, color=NEGRO, espacio_antes=90, espacio_despues=0,
              fuente=CAMBRIA)
-    _parrafo(doc, "Jefe de Área de {{ area_nombre }}", tamano=9, color=NEGRO,
+    # Segundo jefe: solo si el área tiene dos
+    doc.add_paragraph("{%p if jefe2_nombre %}")
+    _parrafo(doc, "{{ jefe2_titulo }} {{ jefe2_nombre }}",
+             tamano=13, negrita=True, color=NEGRO, espacio_despues=0, fuente=CAMBRIA)
+    doc.add_paragraph("{%p endif %}")
+    _parrafo(doc, "{{ jefe_cargo_prefijo }} {{ area_nombre }}", tamano=9, color=NEGRO,
              fuente=CAMBRIA)
 
     doc.add_page_break()
@@ -453,7 +468,7 @@ def crear_informe_1():
     _meta(doc, [
         ("Período académico:", "{{ periodo_nombre }}"),
         ("Área:", "{{ area_nombre }}"),
-        ("Jefe de Área:", "{{ jefe_titulo }} {{ jefe_nombre }}"),
+        ("Jefe(s) de Área:", "{{ jefes_texto }}"),
         ("Fecha del Consejo:", "{{ fecha_consejo }}"),
         ("Fecha del informe:", "{{ fecha_informe }}"),
     ])
@@ -477,9 +492,7 @@ def crear_informe_1():
         doc.add_paragraph(f"{{{{ {campo} }}}}")
         doc.add_paragraph("{%p endif %}")
 
-    _firmas(doc, [
-        ("Jefe de Área de {{ area_nombre }}", "{{ jefe_titulo }} {{ jefe_nombre }}"),
-    ])
+    _firmas_jefes(doc)
 
     ruta = DIR / "informe_1_plantilla.docx"
     doc.save(str(ruta))
@@ -494,7 +507,7 @@ def crear_informe_2():
     _meta(doc, [
         ("Período:", "{{ periodo_nombre }}"),
         ("Área:", "{{ area_nombre }}"),
-        ("Jefe de Área:", "{{ jefe_nombre }}"),
+        ("Jefe(s) de Área:", "{{ jefes_texto }}"),
     ])
 
     doc.add_heading("Resultados del Checklist AVAC", level=2)
@@ -542,9 +555,7 @@ def crear_informe_2():
     doc.add_heading("Acciones generales sugeridas para el área", level=3)
     doc.add_paragraph("{{ acciones_generales_avac }}")
 
-    _firmas(doc, [
-        ("Jefe de Área de {{ area_nombre }}", "{{ jefe_titulo }} {{ jefe_nombre }}"),
-    ])
+    _firmas_jefes(doc)
 
     ruta = DIR / "informe_2_plantilla.docx"
     doc.save(str(ruta))
@@ -559,7 +570,7 @@ def crear_informe_3():
     _meta(doc, [
         ("Período:", "{{ periodo_nombre }}"),
         ("Área:", "{{ area_nombre }}"),
-        ("Jefe de Área:", "{{ jefe_nombre }}"),
+        ("Jefe(s) de Área:", "{{ jefes_texto }}"),
     ])
 
     doc.add_heading("PARTE A — Visitas Áulicas", level=2)
@@ -628,9 +639,7 @@ def crear_informe_3():
     doc.add_paragraph("{{ c.acciones_mejora_docente }}")
     doc.add_paragraph("{% endfor %}")
 
-    _firmas(doc, [
-        ("Jefe de Área de {{ area_nombre }}", "{{ jefe_titulo }} {{ jefe_nombre }}"),
-    ])
+    _firmas_jefes(doc)
 
     ruta = DIR / "informe_3_plantilla.docx"
     doc.save(str(ruta))
@@ -645,7 +654,7 @@ def crear_informe_4():
     _meta(doc, [
         ("Período:", "{{ periodo_nombre }}"),
         ("Área:", "{{ area_nombre }}"),
-        ("Jefe de Área:", "{{ jefe_nombre }}"),
+        ("Jefe(s) de Área:", "{{ jefes_texto }}"),
     ])
 
     doc.add_paragraph("{% for c in calificaciones_finales %}")
@@ -684,9 +693,7 @@ def crear_informe_4():
     doc.add_heading("Acciones generales del área", level=3)
     doc.add_paragraph("{{ acciones_generales_area }}")
 
-    _firmas(doc, [
-        ("Jefe de Área de {{ area_nombre }}", "{{ jefe_titulo }} {{ jefe_nombre }}"),
-    ])
+    _firmas_jefes(doc)
 
     ruta = DIR / "informe_4_plantilla.docx"
     doc.save(str(ruta))

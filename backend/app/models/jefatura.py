@@ -12,9 +12,9 @@ class JefaturaArea(Base):
     periodo_id = Column(Integer, ForeignKey("periodos_academicos.id"), nullable=False)
 
     __table_args__ = (
-        # Una Ã¡rea = un jefe por perÃ­odo
-        UniqueConstraint("area_id", "periodo_id", name="uq_jefatura_area_periodo"),
-        # Un docente = una sola Ã¡rea por perÃ­odo
+        # Un área puede tener hasta 2 jefes por período (las áreas grandes lo
+        # necesitan). El tope de 2 se valida en el endpoint, no con un UNIQUE.
+        # Un docente sigue dirigiendo una sola área por período.
         UniqueConstraint("usuario_id", "periodo_id", name="uq_jefatura_usuario_periodo"),
     )
 

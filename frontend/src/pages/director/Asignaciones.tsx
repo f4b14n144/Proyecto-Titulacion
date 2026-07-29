@@ -181,7 +181,11 @@ export default function Asignaciones() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Formulario */}
           <div className="bg-white rounded-xl border p-5">
-            <h2 className="font-semibold text-gray-700 mb-4">Asignar jefe de área</h2>
+            <h2 className="font-semibold text-gray-700 mb-1">Asignar jefe de área</h2>
+            <p className="text-xs text-gray-500 mb-4">
+              Un área puede tener hasta <strong>2 jefes</strong> (las áreas grandes lo
+              necesitan). Para asignar el segundo, vuelve a elegir la misma área con otro docente.
+            </p>
             <div className="flex flex-col gap-3">
               <select value={fJef.periodo_id || filtroPeriodo}
                 onChange={(e) => setFJef({ ...fJef, periodo_id: e.target.value })}

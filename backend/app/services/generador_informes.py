@@ -242,24 +242,63 @@ def obtener_o_crear_contenido_direccion(db: Session, consejo_id: int) -> Conteni
     return contenido
 
 
-def _jefe_del_area(db: Session, area_id: int, periodo_id: int) -> Usuario | None:
+def _jefes_del_area(db: Session, area_id: int, periodo_id: int) -> list[Usuario]:
+    """
+    Jefes del área en el período (hasta 2). Orden estable por id de jefatura, para
+    que el "primero" no baile entre generaciones.
+    """
     from app.models.jefatura import JefaturaArea
-    jefatura = (
+    jefaturas = (
         db.query(JefaturaArea)
         .filter(JefaturaArea.area_id == area_id, JefaturaArea.periodo_id == periodo_id)
-        .first()
+        .order_by(JefaturaArea.id)
+        .all()
     )
-    if jefatura is None:
-        return None
-    return db.query(Usuario).filter(Usuario.id == jefatura.usuario_id).first()
+    usuarios = []
+    for j in jefaturas:
+        u = db.query(Usuario).filter(Usuario.id == j.usuario_id).first()
+        if u:
+            usuarios.append(u)
+    return usuarios
+
+
+def _jefe_del_area(db: Session, area_id: int, periodo_id: int) -> Usuario | None:
+    """El primer jefe del área (compatibilidad); None si no hay ninguno."""
+    jefes = _jefes_del_area(db, area_id, periodo_id)
+    return jefes[0] if jefes else None
 
 
 def _datos_jefe(db: Session, area_id: int, periodo_id: int) -> dict:
-    """Nombre y título del jefe del área — van en la carátula y en las firmas."""
-    jefe = _jefe_del_area(db, area_id, periodo_id)
+    """
+    Datos de los jefes del área para la carátula y las firmas. Un área puede tener
+    hasta 2 jefes; ambos aparecen en el documento.
+
+    Se exponen campos explícitos para el primero y el segundo (en vez de una lista)
+    porque las plantillas .docx son más robustas con marcadores fijos y un `if`
+    para el segundo que con un bucle.
+    """
+    jefes = _jefes_del_area(db, area_id, periodo_id)
+
+    def _fmt(u: Usuario) -> dict:
+        return {"nombre": nombre_para_firma(u.nombre_completo), "titulo": u.titulo or ""}
+
+    datos = [_fmt(u) for u in jefes]
+    j1 = datos[0] if len(datos) > 0 else {"nombre": "", "titulo": ""}
+    j2 = datos[1] if len(datos) > 1 else {"nombre": "", "titulo": ""}
+
+    # Texto para los metadatos ("Jefe(s) de Área: Ing. A y Ing. B")
+    partes = [f"{d['titulo']} {d['nombre']}".strip() for d in datos]
+    jefes_texto = " y ".join(partes)
+    # Cargo, en singular o plural según cuántos haya
+    cargo_prefijo = "Jefes de Área de" if len(datos) > 1 else "Jefe de Área de"
+
     return {
-        "jefe_nombre": nombre_para_firma(jefe.nombre_completo) if jefe else "",
-        "jefe_titulo": (jefe.titulo or "") if jefe else "",
+        "jefe_nombre": j1["nombre"],
+        "jefe_titulo": j1["titulo"],
+        "jefe2_nombre": j2["nombre"],
+        "jefe2_titulo": j2["titulo"],
+        "jefes_texto": jefes_texto,
+        "jefe_cargo_prefijo": cargo_prefijo,
     }
 
 
@@ -321,7 +360,7 @@ def generar_informe_1(db: Session, consejo_id: int, area_id: int) -> Informe:
     area = db.query(Area).filter(Area.id == area_id).first()
 
     direccion = obtener_o_crear_contenido_direccion(db, consejo_id)
-    jefe = _jefe_del_area(db, area_id, consejo.periodo_id)
+    jefes = _jefes_del_area(db, area_id, consejo.periodo_id)
 
     informe = _obtener_o_crear_informe(db, consejo_id, area_id, 1)
 
@@ -337,9 +376,8 @@ def generar_informe_1(db: Session, consejo_id: int, area_id: int) -> Informe:
         "fecha_consejo": str(consejo.fecha_consejo) if consejo else "",
         "fecha_informe": str(datetime.now(timezone.utc).date()),
         "area_nombre": area.nombre if area else "",
-        # Mismo orden de firma que el resto de informes (nombres, luego apellidos)
-        "jefe_nombre": nombre_para_firma(jefe.nombre_completo) if jefe else "",
-        "jefe_titulo": (jefe.titulo or "") if jefe else "",
+        # Datos de los jefes del área (hasta 2), para la carátula y las firmas
+        **_datos_jefe(db, area_id, consejo.periodo_id),
         # Copia de solo lectura de lo que escribió la dirección
         "secciones_direccion": dict(direccion.secciones or {}),
         # Aporte propio del jefe de área
@@ -349,9 +387,10 @@ def generar_informe_1(db: Session, consejo_id: int, area_id: int) -> Informe:
     flag_modified(informe, "contenido_json")
     informe.estado = informe.estado or "BORRADOR"
     db.commit()
+    nombres_jefes = ", ".join(j.nombre_completo for j in jefes) or "sin jefe"
     logger.info(
         f"Informe 1 — consejo {consejo_id}, área {area_id} "
-        f"({area.nombre if area else '?'}), jefe: {jefe.nombre_completo if jefe else 'sin jefe'}"
+        f"({area.nombre if area else '?'}), jefe(s): {nombres_jefes}"
     )
     return informe
 
