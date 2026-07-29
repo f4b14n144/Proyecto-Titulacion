@@ -1,9 +1,11 @@
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from app.core.deps import get_db, require_role, get_current_user
 from app.models.asignacion import AsignacionDocente
+from app.models.jefatura import JefaturaArea
 from app.models.usuario import Usuario
 from app.models.asignatura import Asignatura
 from app.models.periodo import PeriodoAcademico
@@ -13,6 +15,83 @@ router = APIRouter()
 
 _solo_director = require_role("DIRECTOR_CARRERA")
 _director_o_jefe = require_role("DIRECTOR_CARRERA", "JEFE_AREA")  # lectura compartida
+
+
+class CopiarPeriodoIn(BaseModel):
+    periodo_origen: int
+    periodo_destino: int
+
+
+@router.post("/copiar-periodo", response_model=dict)
+def copiar_periodo(
+    payload: CopiarPeriodoIn,
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(_solo_director),
+):
+    """
+    Copia las asignaciones docente-materia-grupo y las jefaturas de área de un
+    período a otro. Reutiliza la configuración del período anterior sin rehacerla.
+
+    - No duplica lo que el destino ya tenga (se salta).
+    - Solo copia asignaciones de materias **activas** (una materia desactivada no
+      vuelve al catálogo del período nuevo).
+    """
+    if payload.periodo_origen == payload.periodo_destino:
+        raise HTTPException(status_code=400, detail="El período de origen y destino no pueden ser el mismo")
+    for pid in (payload.periodo_origen, payload.periodo_destino):
+        if not db.query(PeriodoAcademico).filter(PeriodoAcademico.id == pid).first():
+            raise HTTPException(status_code=404, detail=f"Período {pid} no encontrado")
+
+    # ── Asignaciones docente-materia-grupo (solo de materias activas) ──
+    asig_origen = (
+        db.query(AsignacionDocente)
+        .join(Asignatura, AsignacionDocente.asignatura_id == Asignatura.id)
+        .filter(AsignacionDocente.periodo_id == payload.periodo_origen, Asignatura.activa.is_(True))
+        .all()
+    )
+    existentes_asig = {
+        (a.usuario_id, a.asignatura_id, a.grupo)
+        for a in db.query(AsignacionDocente).filter(AsignacionDocente.periodo_id == payload.periodo_destino)
+    }
+    copiadas_asig = 0
+    for a in asig_origen:
+        if (a.usuario_id, a.asignatura_id, a.grupo) in existentes_asig:
+            continue
+        db.add(AsignacionDocente(
+            usuario_id=a.usuario_id, asignatura_id=a.asignatura_id,
+            periodo_id=payload.periodo_destino, grupo=a.grupo,
+        ))
+        copiadas_asig += 1
+
+    # ── Jefaturas de área ──
+    jef_origen = db.query(JefaturaArea).filter(JefaturaArea.periodo_id == payload.periodo_origen).all()
+    existentes_jef = {
+        (j.usuario_id, j.area_id)
+        for j in db.query(JefaturaArea).filter(JefaturaArea.periodo_id == payload.periodo_destino)
+    }
+    # También respetar que un docente no dirija dos áreas en el destino
+    usuarios_con_jefatura_destino = {
+        j.usuario_id
+        for j in db.query(JefaturaArea).filter(JefaturaArea.periodo_id == payload.periodo_destino)
+    }
+    copiadas_jef = 0
+    for j in jef_origen:
+        if (j.usuario_id, j.area_id) in existentes_jef:
+            continue
+        if j.usuario_id in usuarios_con_jefatura_destino:
+            continue  # ya es jefe de otra área en el destino
+        db.add(JefaturaArea(
+            usuario_id=j.usuario_id, area_id=j.area_id, periodo_id=payload.periodo_destino,
+        ))
+        usuarios_con_jefatura_destino.add(j.usuario_id)
+        copiadas_jef += 1
+
+    db.commit()
+    return {
+        "data": {"asignaciones": copiadas_asig, "jefaturas": copiadas_jef},
+        "message": f"Copiado del período anterior: {copiadas_asig} asignación(es) y {copiadas_jef} jefatura(s)",
+        "success": True,
+    }
 
 
 @router.get("/mias", response_model=dict)

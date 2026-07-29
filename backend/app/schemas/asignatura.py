@@ -21,3 +21,4 @@ class AsignaturaOut(BaseModel):
     area_id: int
     nombre: str
     codigo: str
+    activa: bool = True

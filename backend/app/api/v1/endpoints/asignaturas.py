@@ -16,12 +16,20 @@ _director_o_jefe = require_role("DIRECTOR_CARRERA", "JEFE_AREA")  # lectura comp
 @router.get("/", response_model=dict)
 def listar_asignaturas(
     area_id: Optional[int] = Query(None),
+    incluir_inactivas: bool = Query(False),
     db: Session = Depends(get_db),
     _: Usuario = Depends(_director_o_jefe),
 ):
+    """
+    Materias del catálogo. Por defecto solo las **activas** (las que sirven para
+    asignar en el período nuevo). Con `incluir_inactivas=true` se ven todas —
+    útil para gestionarlas o reactivarlas.
+    """
     q = db.query(Asignatura)
     if area_id is not None:
         q = q.filter(Asignatura.area_id == area_id)
+    if not incluir_inactivas:
+        q = q.filter(Asignatura.activa.is_(True))
     asignaturas = q.order_by(Asignatura.nombre).all()
     return {"data": [AsignaturaOut.model_validate(a) for a in asignaturas], "message": "OK", "success": True}
 
@@ -81,16 +89,42 @@ def eliminar_asignatura(
     db: Session = Depends(get_db),
     _: Usuario = Depends(_solo_director),
 ):
+    """
+    "Elimina" la materia. Si nunca tuvo asignaciones (en ningún período) se borra
+    de verdad; si ya tiene histórico, se **desactiva** (soft-delete) para no
+    romperlo: desaparece del catálogo activo pero sigue visible en el histórico.
+    """
     asignatura = db.query(Asignatura).filter(Asignatura.id == asig_id).first()
     if not asignatura:
         raise HTTPException(status_code=404, detail="Asignatura no encontrada")
 
     if asignatura.asignaciones:
-        raise HTTPException(
-            status_code=400,
-            detail="No se puede eliminar una asignatura con asignaciones docentes asociadas",
-        )
+        asignatura.activa = False
+        db.commit()
+        return {
+            "data": None,
+            "message": "La materia tiene histórico: se desactivó (ya no aparece para asignar, pero se conserva en los períodos anteriores)",
+            "success": True,
+        }
 
     db.delete(asignatura)
     db.commit()
     return {"data": None, "message": "Asignatura eliminada", "success": True}
+
+
+@router.put("/{asig_id}/activa", response_model=dict)
+def cambiar_estado_asignatura(
+    asig_id: int,
+    activa: bool = Query(...),
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(_solo_director),
+):
+    """Activa o desactiva una materia (para sacarla del catálogo o reincorporarla)."""
+    asignatura = db.query(Asignatura).filter(Asignatura.id == asig_id).first()
+    if not asignatura:
+        raise HTTPException(status_code=404, detail="Asignatura no encontrada")
+    asignatura.activa = activa
+    db.commit()
+    db.refresh(asignatura)
+    estado = "activada" if activa else "desactivada"
+    return {"data": AsignaturaOut.model_validate(asignatura), "message": f"Materia {estado}", "success": True}

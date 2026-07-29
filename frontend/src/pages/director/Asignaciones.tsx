@@ -3,7 +3,7 @@ import api from '../../services/api'
 import type { Area, ApiResponse } from '../../types'
 
 interface Usuario { id: number; nombre_completo: string; email_institucional: string; rol_id: number }
-interface Asignatura { id: number; area_id: number; nombre: string; codigo: string }
+interface Asignatura { id: number; area_id: number; nombre: string; codigo: string; activa: boolean }
 interface PeriodoAcademico { id: number; nombre: string; activo: boolean }
 interface Jefatura { id: number; usuario_id: number; area_id: number; periodo_id: number }
 interface Asignacion { id: number; usuario_id: number; asignatura_id: number; periodo_id: number; grupo: string }
@@ -36,7 +36,9 @@ export default function Asignaciones() {
     const [pRes, aRes, asRes, uRes] = await Promise.all([
       api.get<ApiResponse<PeriodoAcademico[]>>('/periodos/'),
       api.get<ApiResponse<Area[]>>('/areas/'),
-      api.get<ApiResponse<Asignatura[]>>('/asignaturas/'),
+      // Todas (incluidas inactivas) para poder mostrar el nombre en el histórico;
+      // el selector del formulario filtra solo las activas.
+      api.get<ApiResponse<Asignatura[]>>('/asignaturas/', { params: { incluir_inactivas: true } }),
       api.get<ApiResponse<Usuario[]>>('/usuarios/'),
     ])
     setPeriodos(pRes.data.data)
@@ -109,6 +111,41 @@ export default function Asignaciones() {
     catch { alert('No se pudo eliminar.') }
   }
 
+  const [copiando, setCopiando] = useState(false)
+
+  const copiarDePeriodo = async () => {
+    if (!filtroPeriodo) { alert('Selecciona primero el período destino (arriba a la derecha).'); return }
+    const destino = Number(filtroPeriodo)
+    const otros = periodos.filter((p) => p.id !== destino)
+    if (otros.length === 0) { alert('No hay otro período del cual copiar.'); return }
+
+    // Sugerir el período distinto más reciente como origen
+    const lista = otros.map((p) => `${p.id}: ${p.nombre}`).join('\n')
+    const resp = prompt(
+      `Traer asignaciones y jefaturas AL período seleccionado.\n\n` +
+      `Escribe el ID del período de ORIGEN:\n${lista}`,
+      String(otros[0].id),
+    )
+    if (!resp) return
+    const origen = Number(resp)
+    if (!otros.some((p) => p.id === origen)) { alert('ID de período no válido.'); return }
+
+    setCopiando(true)
+    try {
+      const { data } = await api.post<ApiResponse<{ asignaciones: number; jefaturas: number }>>(
+        '/asignaciones/copiar-periodo',
+        { periodo_origen: origen, periodo_destino: destino },
+      )
+      await cargarAsignaciones()
+      alert(data.message)
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      alert(msg ?? 'No se pudo copiar del período anterior.')
+    } finally {
+      setCopiando(false)
+    }
+  }
+
   const crearAsignacion = async () => {
     const periodoEfectivo = fAsig.periodo_id || filtroPeriodo
     if (!fAsig.usuario_id || !fAsig.asignatura_id || !periodoEfectivo || !fAsig.grupo.trim()) {
@@ -153,6 +190,14 @@ export default function Asignaciones() {
           <p className="text-sm text-gray-500 mt-0.5">Jefaturas de área y asignaciones docente-asignatura</p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={copiarDePeriodo}
+            disabled={copiando}
+            className="border border-ups-blue text-ups-blue px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-ups-blue hover:text-white transition disabled:opacity-60"
+            title="Copia las asignaciones y jefaturas de otro período al período seleccionado"
+          >
+            {copiando ? 'Copiando...' : '↧ Traer de otro período'}
+          </button>
           <label className="text-sm text-gray-600">Período:</label>
           <select
             value={filtroPeriodo}
@@ -260,7 +305,7 @@ export default function Asignaciones() {
                 onChange={(e) => setFAsig({ ...fAsig, asignatura_id: e.target.value })}
                 className="border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-ups-blue focus:outline-none">
                 <option value="">Asignatura</option>
-                {asignaturas.map((a) => <option key={a.id} value={a.id}>{a.codigo} — {a.nombre}</option>)}
+                {asignaturas.filter((a) => a.activa).map((a) => <option key={a.id} value={a.id}>{a.codigo} — {a.nombre}</option>)}
               </select>
               <input type="text" value={fAsig.grupo}
                 onChange={(e) => setFAsig({ ...fAsig, grupo: e.target.value.toUpperCase() })}

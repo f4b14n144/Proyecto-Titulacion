@@ -2,13 +2,14 @@ import { useState, useEffect } from 'react'
 import api from '../../services/api'
 import type { Area, ApiResponse } from '../../types'
 
-interface Asignatura { id: number; area_id: number; nombre: string; codigo: string }
+interface Asignatura { id: number; area_id: number; nombre: string; codigo: string; activa: boolean }
 type FormData = { area_id: string; nombre: string; codigo: string }
 
 export default function Asignaturas() {
   const [asignaturas, setAsignaturas] = useState<Asignatura[]>([])
   const [areas, setAreas] = useState<Area[]>([])
   const [filtroArea, setFiltroArea] = useState('')
+  const [verInactivas, setVerInactivas] = useState(false)
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState('')
   const [modalAbierto, setModalAbierto] = useState(false)
@@ -21,7 +22,9 @@ export default function Asignaturas() {
     setCargando(true)
     setError('')
     try {
-      const params = filtroArea ? { area_id: filtroArea } : {}
+      const params: Record<string, string | boolean> = {}
+      if (filtroArea) params.area_id = filtroArea
+      if (verInactivas) params.incluir_inactivas = true
       const [asigRes, areaRes] = await Promise.all([
         api.get<ApiResponse<Asignatura[]>>('/asignaturas/', { params }),
         api.get<ApiResponse<Area[]>>('/areas/'),
@@ -35,7 +38,7 @@ export default function Asignaturas() {
     }
   }
 
-  useEffect(() => { cargar() }, [filtroArea])
+  useEffect(() => { cargar() }, [filtroArea, verInactivas])
 
   const abrirCrear = () => {
     setEditando(null)
@@ -78,13 +81,27 @@ export default function Asignaturas() {
   }
 
   const eliminar = async (a: Asignatura) => {
-    if (!confirm(`¿Eliminar "${a.nombre}" (${a.codigo})?`)) return
+    if (!confirm(
+      `¿Eliminar "${a.nombre}" (${a.codigo})?\n\n` +
+      'Si la materia ya tiene histórico en algún período, no se borra: se ' +
+      'desactiva (deja de aparecer para asignar, pero se conserva en el histórico).'
+    )) return
     try {
-      await api.delete(`/asignaturas/${a.id}`)
+      const { data } = await api.delete<ApiResponse<null>>(`/asignaturas/${a.id}`)
       await cargar()
+      if (data.message) alert(data.message)
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
       alert(msg ?? 'No se pudo eliminar.')
+    }
+  }
+
+  const cambiarEstado = async (a: Asignatura, activa: boolean) => {
+    try {
+      await api.put(`/asignaturas/${a.id}/activa`, null, { params: { activa } })
+      await cargar()
+    } catch {
+      alert('No se pudo cambiar el estado de la materia.')
     }
   }
 
@@ -112,6 +129,11 @@ export default function Asignaturas() {
           <option value="">Todas</option>
           {areas.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}
         </select>
+        <label className="flex items-center gap-2 text-sm text-gray-600 ml-2 cursor-pointer">
+          <input type="checkbox" checked={verInactivas}
+            onChange={(e) => setVerInactivas(e.target.checked)} />
+          Mostrar materias desactivadas
+        </label>
       </div>
 
       {error && <div className="bg-red-50 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm">{error}</div>}
@@ -131,18 +153,30 @@ export default function Asignaturas() {
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Código</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Nombre</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Área</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">Estado</th>
                   <th className="px-4 py-3" />
                 </tr>
               </thead>
               <tbody className="divide-y">
                 {asignaturas.map((a) => (
-                  <tr key={a.id} className="hover:bg-gray-50">
+                  <tr key={a.id} className={`hover:bg-gray-50 ${a.activa ? '' : 'bg-gray-50/60 text-gray-400'}`}>
                     <td className="px-4 py-3 font-mono text-gray-600">{a.codigo}</td>
                     <td className="px-4 py-3 font-medium text-gray-800">{a.nombre}</td>
                     <td className="px-4 py-3 text-gray-500">{nombreArea(a.area_id)}</td>
-                    <td className="px-4 py-3 text-right">
-                      <button onClick={() => abrirEditar(a)} className="text-ups-blue hover:underline text-xs mr-3">Editar</button>
-                      <button onClick={() => eliminar(a)} className="text-red-500 hover:underline text-xs">Eliminar</button>
+                    <td className="px-4 py-3">
+                      {a.activa
+                        ? <span className="px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700">Activa</span>
+                        : <span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-200 text-gray-600">Desactivada</span>}
+                    </td>
+                    <td className="px-4 py-3 text-right whitespace-nowrap">
+                      {a.activa ? (
+                        <>
+                          <button onClick={() => abrirEditar(a)} className="text-ups-blue hover:underline text-xs mr-3">Editar</button>
+                          <button onClick={() => eliminar(a)} className="text-red-500 hover:underline text-xs">Eliminar</button>
+                        </>
+                      ) : (
+                        <button onClick={() => cambiarEstado(a, true)} className="text-green-600 hover:underline text-xs">Reactivar</button>
+                      )}
                     </td>
                   </tr>
                 ))}

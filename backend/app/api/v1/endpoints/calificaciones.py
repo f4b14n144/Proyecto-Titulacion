@@ -67,7 +67,7 @@ def _cargar_catalogo(db: Session, areas: list[int] | None) -> list[dict]:
     está asignado). Director: todas; jefe: las de su(s) área(s). Para el docente
     se devuelve vacío: no crea asignaciones nuevas, solo sube las suyas.
     """
-    q = db.query(Asignatura)
+    q = db.query(Asignatura).filter(Asignatura.activa.is_(True))
     if areas is not None:
         q = q.filter(Asignatura.area_id.in_(areas))
     return [{"id": a.id, "nombre": a.nombre, "codigo": a.codigo} for a in q.all()]
