@@ -61,6 +61,60 @@ def _cargar_asignaciones(
     ]
 
 
+def _cargar_catalogo(db: Session, areas: list[int] | None) -> list[dict]:
+    """
+    Catálogo de materias del alcance (para reconocer materias cuyo grupo aún no
+    está asignado). Director: todas; jefe: las de su(s) área(s). Para el docente
+    se devuelve vacío: no crea asignaciones nuevas, solo sube las suyas.
+    """
+    q = db.query(Asignatura)
+    if areas is not None:
+        q = q.filter(Asignatura.area_id.in_(areas))
+    return [{"id": a.id, "nombre": a.nombre, "codigo": a.codigo} for a in q.all()]
+
+
+def _resolver_o_crear_docente(db: Session, nombre_completo: str) -> Usuario | None:
+    """
+    Encuentra al docente por su nombre (como viene en el Excel) o lo crea si no
+    existe. Devuelve None si el Excel no trae nombre de profesor.
+    """
+    from app.services.excel_processor import _normalizar
+
+    nombre = (nombre_completo or "").strip()
+    if not nombre:
+        return None
+
+    objetivo = _normalizar(nombre)
+    for u in db.query(Usuario).all():
+        if _normalizar(u.nombre_completo) == objetivo:
+            return u
+
+    # No existe: se crea como DOCENTE con un correo derivado del nombre
+    from app.models.rol import Rol
+    from app.core.security import hash_password
+
+    rol_doc = db.query(Rol).filter(Rol.nombre == "DOCENTE").first()
+    partes = objetivo.split()
+    base = f"{partes[0]}.{partes[-1]}" if len(partes) >= 2 else (partes[0] if partes else "docente")
+    email = f"{base}@ups.edu.ec"
+    n = 1
+    while db.query(Usuario).filter(Usuario.email_institucional == email).first():
+        n += 1
+        email = f"{base}{n}@ups.edu.ec"
+
+    docente = Usuario(
+        nombre_completo=nombre,
+        titulo="Ing.",
+        email_institucional=email,
+        hashed_password=hash_password("pass123"),
+        rol_id=rol_doc.id if rol_doc else None,
+        activo=True,
+    )
+    db.add(docente)
+    db.flush()
+    return docente
+
+
 def _alcance_por_rol(db: Session, current_user: Usuario, periodo_id: int) -> tuple[int | None, list[int] | None]:
     """Devuelve (usuario_id, areas) para filtrar según el rol:
     docente → sus materias; jefe → sus áreas; director → todo."""
@@ -118,7 +172,10 @@ async def preview_calificaciones(
                        "No hay asignaciones docente registradas para el período de este consejo")
             raise HTTPException(status_code=400, detail=detalle)
 
-        resultados, adv_archivo = procesar_excel(ruta_tmp, tipo.upper(), asignaciones)
+        # El docente (uid) solo sube sus materias ya asignadas: catálogo vacío para
+        # que no cree asignaciones nuevas. Director y jefe sí autocompletan.
+        catalogo = [] if uid is not None else _cargar_catalogo(db, areas)
+        resultados, adv_archivo = procesar_excel(ruta_tmp, tipo.upper(), asignaciones, catalogo)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
     finally:
@@ -184,14 +241,37 @@ async def confirmar_calificaciones(
                        "No hay asignaciones registradas para este período")
             raise HTTPException(status_code=400, detail=detalle)
 
-        resultados, _ = procesar_excel(ruta_tmp, tipo.upper(), asignaciones)
+        catalogo = [] if uid is not None else _cargar_catalogo(db, areas)
+        resultados, _ = procesar_excel(ruta_tmp, tipo.upper(), asignaciones, catalogo)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
     finally:
         os.unlink(ruta_tmp)
 
     guardados: list[CalificacionOut] = []
+    asignaciones_creadas = 0
     for r in resultados:
+        # Si la materia+grupo venía sin asignación (el Excel manda), crear el
+        # docente del Excel y su asignación, para que la materia entre al informe.
+        if r.get("asignacion_faltante") and r.get("profesor_excel"):
+            docente = _resolver_o_crear_docente(db, r["profesor_excel"])
+            if docente:
+                ya = db.query(AsignacionDocente).filter(
+                    AsignacionDocente.usuario_id == docente.id,
+                    AsignacionDocente.asignatura_id == r["asignatura_id"],
+                    AsignacionDocente.periodo_id == consejo.periodo_id,
+                    AsignacionDocente.grupo == r["grupo"],
+                ).first()
+                if not ya:
+                    db.add(AsignacionDocente(
+                        usuario_id=docente.id,
+                        asignatura_id=r["asignatura_id"],
+                        periodo_id=consejo.periodo_id,
+                        grupo=r["grupo"],
+                    ))
+                    db.flush()
+                    asignaciones_creadas += 1
+
         # Sobreescribir solo si ya existe para esta asignatura+consejo+tipo+GRUPO
         # (sin el grupo, asignaturas con varios grupos se pisaban entre sí)
         existente = db.query(Calificacion).filter(
@@ -226,9 +306,12 @@ async def confirmar_calificaciones(
 
     db.commit()
 
+    msg = f"{len(guardados)} registro(s) guardado(s) correctamente"
+    if asignaciones_creadas:
+        msg += f"; {asignaciones_creadas} asignación(es) creada(s) desde el Excel"
     return {
         "data": [c.model_dump() for c in guardados],
-        "message": f"{len(guardados)} registro(s) guardado(s) correctamente",
+        "message": msg,
         "success": True,
     }
 

@@ -19,6 +19,12 @@ class ResultadoAsignatura(BaseModel):
     total_estudiantes: int
     columnas_detectadas: list[str]
     advertencias: list[str]
+    # El profesor tal como viene en el Excel (columna "Profesor"). Se usa para
+    # crear la asignación que falte.
+    profesor_excel: str = ""
+    # True si esta materia+grupo NO estaba asignada en el sistema y se creará al
+    # confirmar (usando el profesor del Excel).
+    asignacion_faltante: bool = False
 
 
 class PreviewCalificaciones(BaseModel):

@@ -197,6 +197,11 @@ def procesar_excel(
     asignaciones_periodo: list[dict],
     # [{"asignatura_id": int, "asignatura_nombre": str, "asignatura_codigo": str,
     #   "usuario_id": int, "grupo": str}]
+    catalogo: list[dict] | None = None,
+    # Catálogo de materias del alcance: [{"id", "nombre", "codigo"}]. Permite
+    # reconocer una materia que existe pero cuyo grupo aún no está asignado, para
+    # crear la asignación al confirmar. Si es None, se mantiene el comportamiento
+    # antiguo (solo entra lo ya asignado).
 ) -> tuple[list[dict], list[str]]:
     """
     Lee el Excel y retorna (resultados, advertencias_globales).
@@ -243,6 +248,7 @@ def procesar_excel(
         "asignatura":   _detectar_columna(list(df.columns), "asignatura"),
         "grupo":        _detectar_columna(list(df.columns), "grupo"),
         "carrera":      _detectar_columna(list(df.columns), "carrera"),
+        "docente":      _detectar_columna(list(df.columns), "docente"),
     }
 
     columnas_presentes = [k for k, v in col_map.items() if v is not None]
@@ -271,21 +277,47 @@ def procesar_excel(
 
     # Estrategia: agrupar por asignatura+grupo si las columnas existen en el Excel,
     # o bien procesar el archivo completo y cruzar con las asignaciones del período.
+    catalogo = catalogo or []
     if col_map["asignatura"] and col_map["grupo"]:
         grupos = df.groupby([col_map["asignatura"], col_map["grupo"]])  # type: ignore[index]
         for (nombre_asig, grupo_val), bloque in grupos:
             # Normalizar el número de grupo (UPS: "GRUPO - 1 - COMPUTACIÓN - CUE" → "G1")
             grupo_norm = _extraer_numero_grupo(str(grupo_val))
-            asig_match = _buscar_asignacion(
-                str(nombre_asig), grupo_norm, asignaciones_periodo
-            )
-            if asig_match is None:
-                advertencias_globales.append(
-                    f"Sin asignación registrada: '{nombre_asig}' grupo '{grupo_norm}'"
+            profesor_excel = _profesor_del_bloque(bloque, col_map)
+            estudiantes, adv = _extraer_estudiantes(bloque, col_map, tipo)
+
+            # Nivel 1: la materia+grupo ya está asignada → se usa tal cual.
+            asig_match = _buscar_asignacion(str(nombre_asig), grupo_norm, asignaciones_periodo)
+            if asig_match is not None:
+                resultados.append(
+                    _construir_resultado(asig_match, grupo_norm, estudiantes, columnas_presentes, adv)
                 )
                 continue
-            estudiantes, adv = _extraer_estudiantes(bloque, col_map, tipo)
-            resultados.append(_construir_resultado(asig_match, grupo_norm, estudiantes, columnas_presentes, adv))
+
+            # Nivel 2: la materia existe en el catálogo pero el grupo no está
+            # asignado → entra igual; la asignación se creará al confirmar con el
+            # profesor del Excel. (El Excel manda sobre las asignaciones olvidadas.)
+            materia = _buscar_materia_catalogo(str(nombre_asig), catalogo)
+            if materia is not None:
+                res = _construir_resultado(
+                    {"asignatura_id": materia["id"], "asignatura_nombre": materia["nombre"]},
+                    grupo_norm, estudiantes, columnas_presentes, adv,
+                )
+                res["profesor_excel"] = profesor_excel
+                res["asignacion_faltante"] = True
+                resultados.append(res)
+                advertencias_globales.append(
+                    f"'{nombre_asig}' grupo '{grupo_norm}': sin asignación registrada; "
+                    f"se creará con el profesor del Excel ({profesor_excel or 'sin profesor en el archivo'})"
+                )
+                continue
+
+            # Nivel 3: la materia no está en el catálogo → no se puede deducir su
+            # área. Se avisa para que se agregue a mano y se vuelva a subir.
+            advertencias_globales.append(
+                f"'{nombre_asig}' no está en el catálogo de materias: agrégala con su "
+                f"área y vuelve a subir el archivo (grupo '{grupo_norm}' quedó fuera)"
+            )
     else:
         # El Excel no tiene columnas de asignatura/grupo → una sola asignatura
         if len(asignaciones_periodo) == 1:
@@ -302,6 +334,33 @@ def procesar_excel(
         logger.warning(f"Advertencias al procesar Excel: {advertencias_globales}")
 
     return resultados, advertencias_globales
+
+
+def _profesor_del_bloque(df: pd.DataFrame, col_map: dict[str, str | None]) -> str:
+    """Nombre del profesor de un bloque (asignatura+grupo), de la columna del Excel."""
+    col = col_map.get("docente")
+    if not col:
+        return ""
+    for val in df.get(col, []):
+        if val and str(val).strip() and str(val).strip().lower() != "nan":
+            return str(val).strip()
+    return ""
+
+
+def _buscar_materia_catalogo(nombre_asig: str, catalogo: list[dict]) -> dict | None:
+    """
+    Busca una materia en el catálogo por nombre o código (fuzzy tolerante), sin
+    exigir que tenga asignación. Devuelve {"id", "nombre", "codigo"} o None.
+    """
+    norm = _normalizar(nombre_asig)
+    for m in catalogo:
+        nom = _normalizar(m.get("nombre", ""))
+        cod = _normalizar(m.get("codigo", ""))
+        if nom and (nom in norm or norm in nom):
+            return m
+        if cod and cod in norm:
+            return m
+    return None
 
 
 def _buscar_asignacion(nombre_asig: str, grupo: str, asignaciones: list[dict]) -> dict | None:
