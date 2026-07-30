@@ -100,6 +100,7 @@ def _mapa_area_jefes(db: Session) -> dict[int, list[Usuario]]:
 @router.get("/", response_model=dict)
 def listar_informes(
     consejo_id: Optional[int] = None,
+    periodo_id: Optional[int] = None,
     area_id: Optional[int] = None,
     jefe_id: Optional[int] = None,
     db: Session = Depends(get_db),
@@ -116,6 +117,13 @@ def listar_informes(
     q = db.query(Informe)
     if consejo_id:
         q = q.filter(Informe.consejo_id == consejo_id)
+    if periodo_id:
+        # Informes cuyo consejo pertenece a ese período (para separar por período:
+        # el actual por defecto, los anteriores como histórico).
+        from app.models.consejo import ConsejoCarrera
+        q = q.join(ConsejoCarrera, Informe.consejo_id == ConsejoCarrera.id).filter(
+            ConsejoCarrera.periodo_id == periodo_id
+        )
     if area_id:
         q = q.filter(Informe.area_id == area_id)
     if jefe_id:

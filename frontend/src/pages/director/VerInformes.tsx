@@ -55,7 +55,19 @@ export default function VerInformes() {
   const [previewError, setPreviewError] = useState('')
   const [filtroArea, setFiltroArea] = useState('')
   const [filtroJefe, setFiltroJefe] = useState('')
+  // Por defecto se muestran solo los informes del período activo; los de períodos
+  // anteriores quedan como histórico, accesibles cambiando este filtro.
+  const [filtroPeriodo, setFiltroPeriodo] = useState('')
+  const [periodoListo, setPeriodoListo] = useState(false)
   const docxRef = useRef<HTMLDivElement>(null)
+
+  // Al entrar, fijar el período activo como filtro por defecto
+  useEffect(() => {
+    api.get<ApiResponse<Periodo | null>>('/periodos/activo')
+      .then((r) => { if (r.data.data) setFiltroPeriodo(String(r.data.data.id)) })
+      .catch(() => {})
+      .finally(() => setPeriodoListo(true))
+  }, [])
 
   const cargar = async () => {
     setCargando(true)
@@ -64,6 +76,7 @@ export default function VerInformes() {
       const params: Record<string, string> = {}
       if (filtroArea) params.area_id = filtroArea
       if (filtroJefe) params.jefe_id = filtroJefe
+      if (filtroPeriodo) params.periodo_id = filtroPeriodo
       const [iRes, aRes, cRes, pRes] = await Promise.all([
         api.get<ApiResponse<Informe[]>>('/informes/', { params }),
         api.get<ApiResponse<Area[]>>('/areas/'),
@@ -81,7 +94,9 @@ export default function VerInformes() {
     }
   }
 
-  useEffect(() => { cargar() }, [filtroArea, filtroJefe])
+  // Espera a resolver el período activo antes de la primera carga, para no
+  // mostrar por un instante los informes de todos los períodos.
+  useEffect(() => { if (periodoListo) cargar() }, [filtroArea, filtroJefe, filtroPeriodo, periodoListo])
 
   /** Jefes disponibles: se derivan de los informes ya cargados (área → jefe). */
   const [jefes, setJefes] = useState<{ id: number; nombre: string }[]>([])
@@ -155,8 +170,13 @@ export default function VerInformes() {
         <button onClick={cargar} className="text-sm text-ups-blue hover:underline">↻ Actualizar</button>
       </div>
 
-      {/* Filtros: por área o por jefe de área */}
+      {/* Filtros: por período (histórico), área o jefe de área */}
       <div className="flex flex-wrap gap-3 mb-5">
+        <select value={filtroPeriodo} onChange={(e) => setFiltroPeriodo(e.target.value)}
+          className="border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ups-blue">
+          <option value="">Todos los períodos</option>
+          {periodos.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+        </select>
         <select value={filtroArea} onChange={(e) => { setFiltroArea(e.target.value); setFiltroJefe('') }}
           className="border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ups-blue">
           <option value="">Todas las áreas</option>
