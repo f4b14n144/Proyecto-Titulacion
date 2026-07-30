@@ -62,9 +62,11 @@ const docenteGroups: Grupo[] = [
   ]},
 ]
 
+// El menú va expandido por defecto (así se ve en móvil); solo se contrae en
+// computadora (prefijo `md:`) cuando el usuario lo colapsa.
 const linkClass = (colapsado: boolean) => ({ isActive }: { isActive: boolean }) =>
-  `flex items-center gap-2.5 py-2 rounded-lg text-sm transition ${
-    colapsado ? 'px-2.5 justify-center' : 'px-3'
+  `flex items-center gap-2.5 py-2 rounded-lg text-sm transition px-3 ${
+    colapsado ? 'md:px-2.5 md:justify-center' : ''
   } ${
     isActive
       ? 'bg-ups-blue text-white font-medium shadow-sm'
@@ -73,7 +75,14 @@ const linkClass = (colapsado: boolean) => ({ isActive }: { isActive: boolean }) 
 
 const CLAVE_COLAPSADO = 'sidebar_colapsado'
 
-export default function Sidebar() {
+interface SidebarProps {
+  /** En móvil: ¿el panel deslizante está abierto? (en desktop se ignora) */
+  abiertoMovil?: boolean
+  /** Cerrar el panel móvil (al tocar el fondo o navegar) */
+  onCerrar?: () => void
+}
+
+export default function Sidebar({ abiertoMovil = false, onCerrar }: SidebarProps) {
   const { user } = useAuth()
   // Colapsable para recuperar ancho en monitores de baja resolución.
   // La preferencia se recuerda entre sesiones; si no hay ninguna guardada,
@@ -97,31 +106,41 @@ export default function Sidebar() {
     : docenteGroups
 
   return (
-    <aside
-      className={`bg-white border-r h-full flex-shrink-0 py-4 overflow-y-auto overflow-x-hidden
-                  transition-[width] duration-200 ${colapsado ? 'w-16' : 'w-60'}`}
-    >
-      <div className={`px-3 mb-2 flex ${colapsado ? 'justify-center' : 'justify-end'}`}>
-        <button
-          type="button"
-          onClick={() => setColapsado(!colapsado)}
-          title={colapsado ? 'Expandir menú' : 'Contraer menú'}
-          aria-label={colapsado ? 'Expandir menú' : 'Contraer menú'}
-          className="text-gray-400 hover:text-ups-blue hover:bg-gray-100 rounded-lg p-1.5 transition"
-        >
-          {colapsado ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
-        </button>
-      </div>
+    <>
+      {/* Fondo oscuro en móvil cuando el menú está abierto (toca para cerrar) */}
+      {abiertoMovil && (
+        <div className="fixed inset-0 bg-black/40 z-30 md:hidden" onClick={onCerrar} />
+      )}
+
+      <aside
+        className={`bg-white border-r py-4 overflow-y-auto overflow-x-hidden z-40
+                    fixed inset-y-0 left-0 w-60 transition-transform duration-200
+                    md:static md:h-full md:flex-shrink-0 md:z-auto md:translate-x-0 md:transition-[width]
+                    ${abiertoMovil ? 'translate-x-0' : '-translate-x-full'}
+                    ${colapsado ? 'md:w-16' : 'md:w-60'}`}
+      >
+        {/* Botón para contraer: solo en computadora (en móvil el menú es deslizante) */}
+        <div className={`px-3 mb-2 hidden md:flex ${colapsado ? 'justify-center' : 'justify-end'}`}>
+          <button
+            type="button"
+            onClick={() => setColapsado(!colapsado)}
+            title={colapsado ? 'Expandir menú' : 'Contraer menú'}
+            aria-label={colapsado ? 'Expandir menú' : 'Contraer menú'}
+            className="text-gray-400 hover:text-ups-blue hover:bg-gray-100 rounded-lg p-1.5 transition"
+          >
+            {colapsado ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+          </button>
+        </div>
 
       <nav className="flex flex-col gap-1 px-3">
         {grupos.map((grupo, i) => (
           <div key={i} className={grupo.titulo ? 'mt-4' : ''}>
-            {grupo.titulo && !colapsado && (
-              <p className="px-3 mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+            {grupo.titulo && (
+              <p className={`px-3 mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400 ${colapsado ? 'md:hidden' : ''}`}>
                 {grupo.titulo}
               </p>
             )}
-            {grupo.titulo && colapsado && <div className="border-t my-3 mx-1" />}
+            {grupo.titulo && colapsado && <div className="hidden md:block border-t my-3 mx-1" />}
             <div className="flex flex-col gap-0.5">
               {grupo.items.map((it) => {
                 const Icon = it.icon
@@ -130,11 +149,12 @@ export default function Sidebar() {
                     key={it.to}
                     to={it.to}
                     end={it.exact}
+                    onClick={onCerrar}
                     className={linkClass(colapsado)}
                     title={colapsado ? it.label : undefined}
                   >
                     <Icon size={18} strokeWidth={1.9} className="flex-shrink-0" />
-                    {!colapsado && <span className="whitespace-nowrap">{it.label}</span>}
+                    <span className={`whitespace-nowrap ${colapsado ? 'md:hidden' : ''}`}>{it.label}</span>
                   </NavLink>
                 )
               })}
@@ -142,6 +162,7 @@ export default function Sidebar() {
           </div>
         ))}
       </nav>
-    </aside>
+      </aside>
+    </>
   )
 }

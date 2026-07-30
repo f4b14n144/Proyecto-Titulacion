@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './hooks/useAuth'
 import ProtectedRoute from './components/ProtectedRoute'
@@ -30,11 +31,14 @@ import MiCuenta from './pages/perfil/MiCuenta'
 import { destinoPorRol } from './utils/roles'
 
 function AppLayout({ children }: { children: React.ReactNode }) {
+  // En móvil el menú es un panel deslizante; este estado lo abre/cierra.
+  // En computadora el menú está siempre visible y este estado no aplica.
+  const [menuMovilAbierto, setMenuMovilAbierto] = useState(false)
   return (
     <div className="flex flex-col h-screen bg-gray-50">
-      <Navbar />
+      <Navbar onAbrirMenu={() => setMenuMovilAbierto(true)} />
       <div className="flex flex-1 overflow-hidden">
-        <Sidebar />
+        <Sidebar abiertoMovil={menuMovilAbierto} onCerrar={() => setMenuMovilAbierto(false)} />
         <main className="flex-1 overflow-auto">{children}</main>
       </div>
     </div>
