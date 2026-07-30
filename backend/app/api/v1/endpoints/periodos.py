@@ -51,7 +51,7 @@ def crear_periodo(
 @router.get("/activo", response_model=dict)
 def obtener_periodo_activo(
     db: Session = Depends(get_db),
-    _: Usuario = Depends(_solo_director),
+    _: Usuario = Depends(_director_o_jefe),  # lectura compartida, igual que GET /periodos/
 ):
     periodo = db.query(PeriodoAcademico).filter(PeriodoAcademico.activo == True).first()
     if not periodo:
