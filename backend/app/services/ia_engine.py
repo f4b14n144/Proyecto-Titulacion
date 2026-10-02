@@ -11,6 +11,7 @@ Si falla tras N intentos, devuelve texto de fallback genérico.
 """
 
 import os
+import re
 import time
 import statistics
 from typing import Any
@@ -20,9 +21,12 @@ from app.core.config import settings
 
 litellm.set_verbose = False
 
-MAX_REINTENTOS = 3
-DELAY_BASE_SEG = 2.0  # espera exponencial: 2, 4, 8 seg
-MARGEN_RAZONAMIENTO = 1200  # tokens extra para modelos que razonan (gpt-oss)
+MAX_REINTENTOS = 5
+DELAY_BASE_SEG = 2.0  # espera exponencial: 2, 4, 8, 16 seg
+# Tokens extra para modelos que razonan (gpt-oss). Con reasoning_effort=low el
+# razonamiento ronda los 100-250 tokens. No subirlo de más: Groq descuenta
+# max_tokens completo del límite por minuto aunque no se usen.
+MARGEN_RAZONAMIENTO = 500
 
 
 def _api_key_y_modelo() -> tuple[str | None, str]:
@@ -103,15 +107,28 @@ def _llamar_ia(prompt: str, max_tokens: int = 800) -> str:
             return texto
         except Exception as e:
             msg = str(e)
+            msg_min = msg.lower()
             logger.warning(f"Error IA intento {intento}/{MAX_REINTENTOS}: {msg[:200]}")
-            # Si es 429 (cuota agotada diaria) no tiene sentido reintentar rápido
-            if "429" in msg and "Day" in msg:
+            # Groq no siempre incluye "429" en el texto: se detecta también por
+            # la clase de la excepción y por "rate limit".
+            es_rate_limit = (
+                isinstance(e, litellm.RateLimitError)
+                or "429" in msg
+                or "rate limit" in msg_min
+            )
+            # Cuota DIARIA agotada (Groq: "tokens per day (TPD)"): reintentar no sirve
+            if es_rate_limit and ("per day" in msg_min or "(tpd)" in msg_min or "(rpd)" in msg_min):
                 logger.error("Cuota diaria de IA agotada — usando fallback sin reintentos")
                 break
             if intento < MAX_REINTENTOS:
                 espera = DELAY_BASE_SEG * (2 ** (intento - 1))
-                if "429" in msg:
-                    espera = max(espera, 65)  # esperar al menos 65 seg si es rate limit
+                if es_rate_limit:
+                    # Límite por minuto: Groq dice cuánto esperar ("try again in 7.5s")
+                    sugerida = re.search(r"try again in (?:(\d+)m)?([\d.]+)s", msg_min)
+                    if sugerida:
+                        espera = int(sugerida.group(1) or 0) * 60 + float(sugerida.group(2)) + 1
+                    else:
+                        espera = max(espera, 20)
                 time.sleep(espera)
 
     logger.error("IA falló tras todos los reintentos — usando fallback")
