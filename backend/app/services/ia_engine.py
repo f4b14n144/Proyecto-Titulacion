@@ -22,6 +22,7 @@ litellm.set_verbose = False
 
 MAX_REINTENTOS = 3
 DELAY_BASE_SEG = 2.0  # espera exponencial: 2, 4, 8 seg
+MARGEN_RAZONAMIENTO = 1200  # tokens extra para modelos que razonan (gpt-oss)
 
 
 def _api_key_y_modelo() -> tuple[str | None, str]:
@@ -87,8 +88,17 @@ def _llamar_ia(prompt: str, max_tokens: int = 800) -> str:
             }
             if api_key:  # None para Gemini (usa env var GEMINI_API_KEY)
                 kwargs["api_key"] = api_key
+            # Los modelos gpt-oss razonan antes de responder y ese razonamiento
+            # consume max_tokens: con 800 la respuesta llegaba vacía. Se pide
+            # razonamiento corto y se da margen extra para el texto.
+            if "gpt-oss" in modelo:
+                kwargs["reasoning_effort"] = "low"
+                kwargs["max_tokens"] = max_tokens + MARGEN_RAZONAMIENTO
             respuesta = litellm.completion(**kwargs)
-            texto = respuesta.choices[0].message.content.strip()
+            texto = (respuesta.choices[0].message.content or "").strip()
+            if not texto:
+                motivo = respuesta.choices[0].finish_reason
+                raise ValueError(f"respuesta vacía de la IA (finish_reason={motivo})")
             logger.debug(f"IA respondió ({len(texto)} chars) en intento {intento}")
             return texto
         except Exception as e:
@@ -105,7 +115,7 @@ def _llamar_ia(prompt: str, max_tokens: int = 800) -> str:
                 time.sleep(espera)
 
     logger.error("IA falló tras todos los reintentos — usando fallback")
-    return "[Análisis no disponible — cuota de IA agotada. Editar manualmente este campo.]"
+    return "[Análisis no disponible — la IA no respondió. Editar manualmente este campo.]"
 
 
 # ──────────────────────────────────────────────────────────────────
