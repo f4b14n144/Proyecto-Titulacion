@@ -20,6 +20,9 @@ import litellm
 from app.core.config import settings
 
 litellm.set_verbose = False
+# Sin esto litellm imprime "Give Feedback / Get Help..." en cada excepción
+# (cada rate limit), y ensucia el log
+litellm.suppress_debug_info = True
 
 MAX_REINTENTOS = 5
 DELAY_BASE_SEG = 2.0  # espera exponencial: 2, 4, 8, 16 seg
