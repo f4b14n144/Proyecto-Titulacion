@@ -385,6 +385,9 @@ Cada valor es un texto de máximo 4 oraciones, sin frases de relleno, tono insti
             logger.warning(f"Informe 4: falta '{clave}' en el JSON combinado — se usa una llamada por análisis")
             return None
         resultado[clave] = valor.strip()
+    # A veces la lista numerada llega en una sola línea ("1. … 2. …"):
+    # cada acción va en su propia línea, como cuando se pedía por separado
+    resultado["acciones_mejora"] = re.sub(r"\s+(?=\d+\.\s)", "\n", resultado["acciones_mejora"])
     return resultado
 
 
