@@ -10,6 +10,7 @@ Manejo de errores: reintentos con backoff exponencial.
 Si falla tras N intentos, devuelve texto de fallback genérico.
 """
 
+import json
 import os
 import re
 import time
@@ -123,8 +124,14 @@ def _llamar_ia(prompt: str, max_tokens: int = 800) -> str:
                 del kwargs["max_tokens"]
                 kwargs["max_completion_tokens"] = max_tokens + MARGEN_RAZONAMIENTO
                 kwargs["extra_body"] = {"reasoning_effort": "low"}
+            # Qwen3 en Groq: con el razonamiento apagado responde directo, como
+            # llama, sin gastar tokens del límite por minuto en "pensar".
+            elif "qwen3" in modelo:
+                kwargs["reasoning_effort"] = "none"
             respuesta = litellm.completion(**kwargs)
             texto = (respuesta.choices[0].message.content or "").strip()
+            # Por si algún modelo deja su razonamiento dentro del texto
+            texto = re.sub(r"<think>.*?</think>", "", texto, flags=re.DOTALL).strip()
             if not texto:
                 motivo = respuesta.choices[0].finish_reason
                 raise ValueError(f"respuesta vacía de la IA (finish_reason={motivo})")
@@ -305,6 +312,82 @@ Formato: lista numerada, cada acción en una sola oración. Español formal."""
 # Prompts — Informe 4 (Final)
 # ──────────────────────────────────────────────────────────────────
 
+CLAVES_FINALES = [
+    "analisis_general",
+    "distribucion_aprobacion",
+    "comportamiento_notas_finales",
+    "analisis_parcial1",
+    "analisis_parcial2",
+    "comparacion_parciales",
+    "uso_recuperacion",
+    "relacion_parciales_nota_final",
+    "outliers",
+    "patrones_generales",
+    "acciones_mejora",
+]
+
+
+def _analisis_finales_combinado(
+    contexto_base: str, est: dict, respuesta_docente: str, asignatura: str, grupo: str
+) -> dict | None:
+    """
+    Pide los 11 textos del Informe 4 en una sola llamada, como JSON.
+    Devuelve None si la respuesta no trae un JSON válido con todas las claves:
+    el llamador usa entonces el método de una llamada por análisis.
+    """
+    nf = est.get("nota_final", {})
+    p1 = est.get("parcial1", {})
+    p2 = est.get("parcial2", {})
+    contexto_docente = (
+        f"\nEl docente respondió: \"{respuesta_docente[:500]}\"" if respuesta_docente else ""
+    )
+    prompt = f"""Eres analista académico de la UPS Cuenca. Redacta en español formal y objetivo.
+{contexto_base}
+NF — Desv. estándar: {nf.get('desv_std','—')}
+P1 — Máx: {p1.get('max','—')} | Mín: {p1.get('min','—')}
+P2 — Máx: {p2.get('max','—')} | Mín: {p2.get('min','—')}{contexto_docente}
+
+Devuelve SOLO un objeto JSON (sin texto antes ni después, sin ```), con estas claves.
+Cada valor es un texto de máximo 4 oraciones, sin frases de relleno, tono institucional directo:
+- "analisis_general": análisis general del rendimiento del grupo en el período completo.
+- "distribucion_aprobacion": distribución entre aprobados y reprobados y qué indica sobre el grupo.
+- "comportamiento_notas_finales": comportamiento de las notas finales (promedio, máxima, mínima, desviación).
+- "analisis_parcial1": desempeño en el Parcial 1.
+- "analisis_parcial2": desempeño en el Parcial 2.
+- "comparacion_parciales": comparación entre Parcial 1 y Parcial 2, si hubo mejora o retroceso.
+- "uso_recuperacion": uso del examen de recuperación y su impacto.
+- "relacion_parciales_nota_final": si los parciales predicen adecuadamente la nota final.
+- "outliers": posibles valores atípicos según máxima, mínima y desviación estándar.
+- "patrones_generales": patrones generales de rendimiento observados.
+- "acciones_mejora": 3-4 acciones de mejora concretas para {asignatura} grupo {grupo}, como lista numerada en un solo texto (separadas por saltos de línea)."""
+
+    texto = _llamar_ia(prompt, max_tokens=2500)
+    # Si la IA no respondió (sin saldo, cuota diaria, etc.) no tiene sentido
+    # reintentar con 11 llamadas más: se deja el fallback en todos los campos.
+    if texto.startswith("[Análisis"):
+        return {clave: texto for clave in CLAVES_FINALES}
+    inicio, fin = texto.find("{"), texto.rfind("}")
+    if inicio == -1 or fin <= inicio:
+        logger.warning("Informe 4: la respuesta combinada no trae JSON — se usa una llamada por análisis")
+        return None
+    try:
+        datos = json.loads(texto[inicio:fin + 1], strict=False)
+    except json.JSONDecodeError:
+        logger.warning("Informe 4: JSON combinado inválido — se usa una llamada por análisis")
+        return None
+
+    resultado = {}
+    for clave in CLAVES_FINALES:
+        valor = datos.get(clave)
+        if isinstance(valor, list):  # p. ej. acciones_mejora devuelta como lista
+            valor = "\n".join(f"{i}. {v}" for i, v in enumerate(valor, 1))
+        if not isinstance(valor, str) or not valor.strip():
+            logger.warning(f"Informe 4: falta '{clave}' en el JSON combinado — se usa una llamada por análisis")
+            return None
+        resultado[clave] = valor.strip()
+    return resultado
+
+
 def analizar_calificaciones_finales(
     asignatura: str,
     grupo: str,
@@ -340,6 +423,14 @@ Máximo 4 oraciones. Sin frases de relleno. Tono institucional directo.""",
             max_tokens=tokens,
         )
 
+    # Intento 1: los 11 textos en UNA sola llamada. Con límites de ~8000 tokens
+    # por minuto (Groq gratis), 11 llamadas por asignatura reenviando el mismo
+    # contexto hacían que un Informe 4 tardara casi una hora y agotara la cuota.
+    combinado = _analisis_finales_combinado(contexto_base, est, respuesta_docente, asignatura, grupo)
+    if combinado:
+        return {**combinado, **est}
+
+    # Intento 2 (fallback): una llamada por análisis, como antes
     analisis = {}
 
     analisis["analisis_general"] = _analisis(
