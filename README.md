@@ -109,7 +109,7 @@ Nginx actúa como único punto de entrada (reverse proxy) hacia el frontend y la
 | **Frontend** | React 18, TypeScript, Vite, Tailwind CSS, React Router v6, Axios, lucide-react, docx-preview |
 | **Backend** | Python 3.11, FastAPI, SQLAlchemy, Alembic, Pydantic v2, APScheduler, pandas/openpyxl |
 | **Documentos** | python-docx-template (Jinja2 en `.docx`), python-docx |
-| **IA** | LiteLLM (multi-proveedor: GROQ por defecto; soporta DeepSeek, Gemini, Anthropic) |
+| **IA** | LiteLLM (multi-proveedor, configurable desde `.env`: Groq por defecto; OpenAI, Gemini, Anthropic, DeepSeek…) |
 | **Base de datos** | PostgreSQL 15 |
 | **Infraestructura** | Docker, Docker Compose, Nginx (reverse proxy) |
 | **Seguridad** | JWT (python-jose) + bcrypt (passlib), auto-refresh de token en el frontend |
@@ -181,9 +181,10 @@ están en el repositorio. Para cargarlas, entra como directora y usa
 > se versionan en el repo**. Sin ellas, los informes salen con un formato básico de
 > respaldo en lugar del formato institucional completo (logo, encabezado y pie).
 
-> **Nota sobre el proveedor de IA:** por defecto se usa **GROQ** (free tier, sin
-> tarjeta). Requiere `GROQ_API_KEY` en `.env`. El motor soporta otros proveedores
-> cambiando `AI_PROVIDER` y `AI_MODEL`.
+> **Nota sobre el proveedor de IA:** todo va por LiteLLM y se configura en el
+> `.env`, sin tocar código: `AI_MODEL` (`<proveedor>/<modelo>`), la API key del
+> proveedor, y opcionalmente `AI_PARAMS` y `AI_MAX_TOKENS_EXTRA`. Por defecto se
+> usa **Groq** (gratis, sin tarjeta). Ver `.env.example`.
 
 ---
 
@@ -198,9 +199,10 @@ DATABASE_URL=postgresql://usuario:password@postgres:5432/informes_db
 # Seguridad (generar con: openssl rand -hex 32)
 SECRET_KEY=<clave secreta>
 
-# Proveedor de IA (por defecto GROQ)
-AI_PROVIDER=groq
-AI_MODEL=groq/llama-3.3-70b-versatile
+# IA vía LiteLLM: <proveedor>/<modelo> + la API key de ese proveedor
+AI_MODEL=groq/openai/gpt-oss-120b
+AI_PARAMS={"reasoning_effort":"low"}
+AI_MAX_TOKENS_EXTRA=500
 GROQ_API_KEY=<api key de GROQ>
 
 # Correo saliente (envío de notificaciones y recordatorios)

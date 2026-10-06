@@ -11,8 +11,11 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
-    AI_PROVIDER: str = "groq"
-    AI_MODEL: str = "groq/llama-3.3-70b-versatile"
+    # IA vía LiteLLM — ver la cabecera de services/ia_engine.py
+    AI_MODEL: str = "groq/openai/gpt-oss-120b"
+    AI_PARAMS: str = ""             # JSON con parámetros extra para litellm
+    AI_MAX_TOKENS_EXTRA: int = 0    # margen para modelos que razonan
+    AI_PROVIDER: str = ""           # obsoleto: el proveedor va en el prefijo de AI_MODEL
     ANTHROPIC_API_KEY: str = ""
     GEMINI_API_KEY: str = ""
     DEEPSEEK_API_KEY: str = ""

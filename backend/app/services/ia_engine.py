@@ -1,13 +1,22 @@
 """
-Motor de IA usando LiteLLM — proveedor configurable por .env.
-Proveedores soportados: gemini (Gemini API), anthropic (Claude).
+Motor de IA usando LiteLLM. TODO se configura desde el .env, sin tocar código:
 
-Genera análisis narrativos para los informes 3 y 4.
-Todos los prompts están en español y producen texto listo para
-pegar en el .docx institucional.
+    AI_MODEL=<proveedor>/<modelo>      ej. groq/openai/gpt-oss-120b,
+                                           gemini/gemini-2.5-flash,
+                                           openai/gpt-4.1-mini, anthropic/claude-...
+    <PROVEEDOR>_API_KEY=...            la variable estándar que LiteLLM busca
+                                       (GROQ_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY…)
+    AI_PARAMS={"reasoning_effort":"low"}   parámetros extra para litellm.completion
+                                           (JSON). Los que el modelo no soporte se
+                                           descartan solos (litellm.drop_params).
+    AI_MAX_TOKENS_EXTRA=500            tokens extra por llamada, para modelos que
+                                       razonan antes de responder (gpt-oss, o3…).
 
-Manejo de errores: reintentos con backoff exponencial.
-Si falla tras N intentos, devuelve texto de fallback genérico.
+Lista de proveedores y nombres de modelo: https://docs.litellm.ai/docs/providers
+
+Manejo de errores: reintentos esperando lo que indique el proveedor en los
+límites por minuto; sin reintentos si se agotó la cuota diaria o el saldo.
+Si falla, devuelve un texto de fallback que el usuario puede editar.
 """
 
 import json
@@ -24,110 +33,62 @@ litellm.set_verbose = False
 # Sin esto litellm imprime "Give Feedback / Get Help..." en cada excepción
 # (cada rate limit), y ensucia el log
 litellm.suppress_debug_info = True
+# Si AI_PARAMS trae algo que el modelo no soporta, se descarta en vez de fallar:
+# así se puede cambiar de modelo sin tener que limpiar AI_PARAMS primero.
+litellm.drop_params = True
 
 MAX_REINTENTOS = 5
 DELAY_BASE_SEG = 2.0  # espera exponencial: 2, 4, 8, 16 seg
-# Tokens extra para modelos que razonan (gpt-oss). Con reasoning_effort=low el
-# razonamiento ronda los 100-250 tokens. No subirlo de más: Groq descuenta
-# max_tokens completo del límite por minuto aunque no se usen.
-MARGEN_RAZONAMIENTO = 500
+
+# LiteLLM lee las API keys de las variables de entorno estándar. Con Docker ya
+# llegan por env_file; esto cubre el caso de leerlas solo del .env (desarrollo).
+for _var in ("GROQ_API_KEY", "GEMINI_API_KEY", "OPENAI_API_KEY",
+             "ANTHROPIC_API_KEY", "DEEPSEEK_API_KEY"):
+    _valor = getattr(settings, _var, "")
+    if _valor and not os.environ.get(_var):
+        os.environ[_var] = _valor
 
 
-def _api_key_y_modelo() -> tuple[str | None, str]:
-    """Devuelve (api_key_o_None, model_id) según el proveedor configurado."""
-    proveedor = settings.AI_PROVIDER.lower()
-    modelo = settings.AI_MODEL
-
-    if proveedor == "gemini":
-        # LiteLLM lee GEMINI_API_KEY del entorno automáticamente
-        os.environ["GEMINI_API_KEY"] = settings.GEMINI_API_KEY
-        if not modelo.startswith("gemini/"):
-            modelo = f"gemini/{modelo}"
-        # Para Gemini API no pasamos api_key directamente — LiteLLM lo toma del env
-        return None, modelo
-
-    if proveedor == "deepseek":
-        # LiteLLM lee DEEPSEEK_API_KEY del entorno automáticamente
-        os.environ["DEEPSEEK_API_KEY"] = settings.DEEPSEEK_API_KEY
-        if not modelo.startswith("deepseek/"):
-            modelo = f"deepseek/{modelo}"
-        return settings.DEEPSEEK_API_KEY, modelo
-
-    if proveedor == "groq":
-        # LiteLLM lee GROQ_API_KEY del entorno automáticamente
-        os.environ["GROQ_API_KEY"] = settings.GROQ_API_KEY
-        if not modelo.startswith("groq/"):
-            modelo = f"groq/{modelo}"
-        return settings.GROQ_API_KEY, modelo
-
-    if proveedor == "openai":
-        os.environ["OPENAI_API_KEY"] = settings.OPENAI_API_KEY
-        if not modelo.startswith("openai/"):
-            modelo = f"openai/{modelo}"
-        return settings.OPENAI_API_KEY, modelo
-
-    # Anthropic
-    modelo_anthropic = modelo if modelo.startswith("anthropic/") else f"anthropic/{modelo}"
-    return settings.ANTHROPIC_API_KEY, modelo_anthropic
+def _params_extra() -> dict:
+    """AI_PARAMS del .env como dict. Si el JSON está mal, se ignora y se avisa."""
+    crudo = (settings.AI_PARAMS or "").strip()
+    if not crudo:
+        return {}
+    try:
+        datos = json.loads(crudo)
+        return datos if isinstance(datos, dict) else {}
+    except json.JSONDecodeError:
+        logger.error(f"AI_PARAMS no es un JSON válido ({crudo!r}) — se ignora")
+        return {}
 
 
-def _api_configurada() -> bool:
-    proveedor = settings.AI_PROVIDER.lower()
-    if proveedor == "gemini":
-        return bool(settings.GEMINI_API_KEY)
-    if proveedor == "deepseek":
-        return bool(settings.DEEPSEEK_API_KEY)
-    if proveedor == "groq":
-        return bool(settings.GROQ_API_KEY)
-    if proveedor == "openai":
-        return bool(settings.OPENAI_API_KEY)
-    return bool(settings.ANTHROPIC_API_KEY) and settings.ANTHROPIC_API_KEY != "sk-ant-REEMPLAZAR"
-
-
-def _es_razonador_openai(modelo: str) -> bool:
-    """gpt-5*, o1*, o3*, o4* — modelos de OpenAI que razonan antes de responder."""
-    nombre = modelo.removeprefix("openai/")
-    return bool(re.match(r"(gpt-5|o\d)", nombre))
+def _claves_faltantes() -> list[str]:
+    """Variables de entorno que LiteLLM necesita para AI_MODEL y no están."""
+    try:
+        info = litellm.validate_environment(model=settings.AI_MODEL)
+        return list(info.get("missing_keys") or [])
+    except Exception:
+        return []  # si no sabe validarlo, que lo intente igual
 
 
 def _llamar_ia(prompt: str, max_tokens: int = 800) -> str:
     """
-    Llama a LiteLLM con reintentos y backoff exponencial.
+    Llama a LiteLLM con reintentos.
     Devuelve el texto generado o un mensaje de fallback.
     """
-    if not _api_configurada():
-        logger.warning(f"API key de IA ({settings.AI_PROVIDER}) no configurada — devolviendo placeholder")
-        return f"[Análisis pendiente: configure {settings.AI_PROVIDER.upper()}_API_KEY en el archivo .env]"
-
-    api_key, modelo = _api_key_y_modelo()
+    faltan = _claves_faltantes()
+    if faltan:
+        logger.warning(f"Falta configurar {', '.join(faltan)} para {settings.AI_MODEL}")
+        return f"[Análisis pendiente: configure {', '.join(faltan)} en el archivo .env]"
 
     for intento in range(1, MAX_REINTENTOS + 1):
         try:
             kwargs: dict = {
-                "model": modelo,
+                **_params_extra(),
+                "model": settings.AI_MODEL,
                 "messages": [{"role": "user", "content": prompt}],
-                "max_tokens": max_tokens,
+                "max_tokens": max_tokens + settings.AI_MAX_TOKENS_EXTRA,
             }
-            if api_key:  # None para Gemini (usa env var GEMINI_API_KEY)
-                kwargs["api_key"] = api_key
-            # Los modelos gpt-oss razonan antes de responder y ese razonamiento
-            # consume max_tokens: con 800 la respuesta llegaba vacía. Se pide
-            # razonamiento corto y se da margen extra para el texto.
-            if "gpt-oss" in modelo:
-                kwargs["reasoning_effort"] = "low"
-                kwargs["max_tokens"] = max_tokens + MARGEN_RAZONAMIENTO
-            # Modelos de razonamiento de OpenAI (gpt-5*, o1/o3/o4*): no aceptan
-            # max_tokens sino max_completion_tokens, y también razonan antes de
-            # responder. Se manda por extra_body para que litellm no lo filtre
-            # aunque no conozca el modelo.
-            elif _es_razonador_openai(modelo):
-                del kwargs["max_tokens"]
-                kwargs["max_completion_tokens"] = max_tokens + MARGEN_RAZONAMIENTO
-                kwargs["extra_body"] = {"reasoning_effort": "low"}
-            # Qwen3 en Groq: con el razonamiento apagado responde directo, como
-            # llama, sin gastar tokens del límite por minuto en "pensar".
-            elif "qwen3" in modelo:
-                kwargs["reasoning_effort"] = "none"
             respuesta = litellm.completion(**kwargs)
             texto = (respuesta.choices[0].message.content or "").strip()
             # Por si algún modelo deja su razonamiento dentro del texto
@@ -149,7 +110,9 @@ def _llamar_ia(prompt: str, max_tokens: int = 800) -> str:
                 or "rate limit" in msg_min
             )
             # Cuota DIARIA agotada (Groq: "tokens per day (TPD)"): reintentar no sirve
-            if es_rate_limit and ("per day" in msg_min or "(tpd)" in msg_min or "(rpd)" in msg_min):
+            # Gemini: "...PerDay..." en el nombre de la métrica
+            if es_rate_limit and ("per day" in msg_min or "perday" in msg_min
+                                  or "(tpd)" in msg_min or "(rpd)" in msg_min):
                 logger.error("Cuota diaria de IA agotada — usando fallback sin reintentos")
                 break
             # Cuenta sin saldo (OpenAI: "insufficient_quota" / "no credits"). También
@@ -162,8 +125,9 @@ def _llamar_ia(prompt: str, max_tokens: int = 800) -> str:
             if intento < MAX_REINTENTOS:
                 espera = DELAY_BASE_SEG * (2 ** (intento - 1))
                 if es_rate_limit:
-                    # Límite por minuto: Groq dice cuánto esperar ("try again in 7.5s")
-                    sugerida = re.search(r"try again in (?:(\d+)m)?([\d.]+)s", msg_min)
+                    # Límite por minuto: el proveedor dice cuánto esperar
+                    # (Groq: "try again in 7.5s", Gemini: "retry in 17.2s")
+                    sugerida = re.search(r"(?:try again|retry) in (?:(\d+)m)?([\d.]+)s", msg_min)
                     if sugerida:
                         espera = int(sugerida.group(1) or 0) * 60 + float(sugerida.group(2)) + 1
                     else:
