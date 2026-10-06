@@ -140,7 +140,7 @@ def _llamar_ia(prompt: str, max_tokens: int = 800) -> str:
         except Exception as e:
             msg = str(e)
             msg_min = msg.lower()
-            logger.warning(f"Error IA intento {intento}/{MAX_REINTENTOS}: {msg[:200]}")
+            logger.warning(f"Error IA intento {intento}/{MAX_REINTENTOS}: {msg[:450]}")
             # Groq no siempre incluye "429" en el texto: se detecta también por
             # la clase de la excepción y por "rate limit".
             es_rate_limit = (
@@ -154,7 +154,9 @@ def _llamar_ia(prompt: str, max_tokens: int = 800) -> str:
                 break
             # Cuenta sin saldo (OpenAI: "insufficient_quota" / "no credits"). También
             # llega como 429, pero esperar no lo arregla: hay que cargar saldo.
-            if "insufficient_quota" in msg_min or "credits" in msg_min or "billing" in msg_min:
+            # OJO: no buscar "billing" a secas: Groq termina TODOS sus rate limit
+            # con un enlace a console.groq.com/settings/billing.
+            if "insufficient_quota" in msg_min or "no credits" in msg_min or "credits remaining" in msg_min:
                 logger.error("La cuenta del proveedor de IA no tiene saldo — usando fallback sin reintentos")
                 break
             if intento < MAX_REINTENTOS:
