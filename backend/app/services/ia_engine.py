@@ -59,6 +59,12 @@ def _api_key_y_modelo() -> tuple[str | None, str]:
             modelo = f"groq/{modelo}"
         return settings.GROQ_API_KEY, modelo
 
+    if proveedor == "openai":
+        os.environ["OPENAI_API_KEY"] = settings.OPENAI_API_KEY
+        if not modelo.startswith("openai/"):
+            modelo = f"openai/{modelo}"
+        return settings.OPENAI_API_KEY, modelo
+
     # Anthropic
     modelo_anthropic = modelo if modelo.startswith("anthropic/") else f"anthropic/{modelo}"
     return settings.ANTHROPIC_API_KEY, modelo_anthropic
@@ -72,7 +78,15 @@ def _api_configurada() -> bool:
         return bool(settings.DEEPSEEK_API_KEY)
     if proveedor == "groq":
         return bool(settings.GROQ_API_KEY)
+    if proveedor == "openai":
+        return bool(settings.OPENAI_API_KEY)
     return bool(settings.ANTHROPIC_API_KEY) and settings.ANTHROPIC_API_KEY != "sk-ant-REEMPLAZAR"
+
+
+def _es_razonador_openai(modelo: str) -> bool:
+    """gpt-5*, o1*, o3*, o4* — modelos de OpenAI que razonan antes de responder."""
+    nombre = modelo.removeprefix("openai/")
+    return bool(re.match(r"(gpt-5|o\d)", nombre))
 
 
 def _llamar_ia(prompt: str, max_tokens: int = 800) -> str:
@@ -101,6 +115,14 @@ def _llamar_ia(prompt: str, max_tokens: int = 800) -> str:
             if "gpt-oss" in modelo:
                 kwargs["reasoning_effort"] = "low"
                 kwargs["max_tokens"] = max_tokens + MARGEN_RAZONAMIENTO
+            # Modelos de razonamiento de OpenAI (gpt-5*, o1/o3/o4*): no aceptan
+            # max_tokens sino max_completion_tokens, y también razonan antes de
+            # responder. Se manda por extra_body para que litellm no lo filtre
+            # aunque no conozca el modelo.
+            elif _es_razonador_openai(modelo):
+                del kwargs["max_tokens"]
+                kwargs["max_completion_tokens"] = max_tokens + MARGEN_RAZONAMIENTO
+                kwargs["extra_body"] = {"reasoning_effort": "low"}
             respuesta = litellm.completion(**kwargs)
             texto = (respuesta.choices[0].message.content or "").strip()
             if not texto:
