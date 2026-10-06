@@ -145,6 +145,11 @@ def _llamar_ia(prompt: str, max_tokens: int = 800) -> str:
             if es_rate_limit and ("per day" in msg_min or "(tpd)" in msg_min or "(rpd)" in msg_min):
                 logger.error("Cuota diaria de IA agotada — usando fallback sin reintentos")
                 break
+            # Cuenta sin saldo (OpenAI: "insufficient_quota" / "no credits"). También
+            # llega como 429, pero esperar no lo arregla: hay que cargar saldo.
+            if "insufficient_quota" in msg_min or "credits" in msg_min or "billing" in msg_min:
+                logger.error("La cuenta del proveedor de IA no tiene saldo — usando fallback sin reintentos")
+                break
             if intento < MAX_REINTENTOS:
                 espera = DELAY_BASE_SEG * (2 ** (intento - 1))
                 if es_rate_limit:
