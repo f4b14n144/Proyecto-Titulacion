@@ -102,6 +102,11 @@ def _llamar_ia(prompt: str, max_tokens: int = 800) -> str:
             msg = str(e)
             msg_min = msg.lower()
             logger.warning(f"Error IA intento {intento}/{MAX_REINTENTOS}: {msg[:450]}")
+            # Modelo inexistente, key inválida o petición mal formada: reintentar
+            # no lo arregla, hay que corregir AI_MODEL / la API key en el .env
+            if isinstance(e, (litellm.NotFoundError, litellm.AuthenticationError, litellm.BadRequestError)):
+                logger.error(f"Error de configuración de IA ({type(e).__name__}) — revisar AI_MODEL y la API key en el .env")
+                break
             # Groq no siempre incluye "429" en el texto: se detecta también por
             # la clase de la excepción y por "rate limit".
             es_rate_limit = (
